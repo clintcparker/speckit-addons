@@ -56,6 +56,11 @@ must not reach existing users automatically.
    uv run --with pyyaml python scripts/validate_catalog.py
    ```
 
+   Do **not** pass `--check-urls` before the tag is pushed. Beyond the
+   guaranteed 404, `raw.githubusercontent.com` caches negative responses for
+   several minutes, so requesting the URL early makes it keep 404ing *after*
+   you push the tag. Add the flag only once the tag is up.
+
 5. Commit, then tag `<id>-v<version>` and push the tag.
 
 ## Releasing a new version
