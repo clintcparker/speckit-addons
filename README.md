@@ -6,21 +6,29 @@ and over time presets, extensions, and bundles.
 Everything here installs through Spec Kit's own catalog mechanism. Nothing needs
 to be copy-pasted into `.specify/` by hand.
 
-## Install
+
+
+
+## Add-ons
+
+### Workflows
+
+| ID | Version | Description |
+|---|---|---|
+| [`yolo`](workflows/yolo/) | 0.1.0 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
+
+
+#### Install
 
 Register this repo's workflow catalog once, per project or per user:
 
 ```bash
 specify workflow catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/workflows/catalog.json
-```
-
-Then install anything in it by id:
-
-```bash
 specify workflow add yolo
-specify workflow run yolo -i spec="make the app do the thing"
 ```
+
+_OR_
 
 Registering the catalog also means every workflow published here later is
 available with no further setup — `specify workflow list` and
@@ -33,14 +41,16 @@ specify workflow add yolo --from \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.0/workflows/yolo/workflow.yml
 ```
 
-## Add-ons
+Then set to work:
 
-### Workflows
+```bash
 
-| ID | Version | Description |
-|---|---|---|
-| [`yolo`](workflows/yolo/) | 0.1.0 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
+specify workflow run yolo -i spec="make the app do the thing"
+```
 
+
+
+### More
 Presets, extensions, and bundles will appear here as they are published, each
 with its own catalog under a directory of the same name. Spec Kit keeps a
 separate catalog for each add-on type, so each one is registered separately.
@@ -56,7 +66,7 @@ See [workflows/README.md](workflows/README.md) for the release procedure.
 
 ## Security
 
-Spec Kit workflows are third-party code. The Spec Kit maintainers
+Spec Kit add-ons are third-party code. The Spec Kit maintainers
 [do not review, audit, endorse, or support](https://github.github.io/spec-kit/reference/workflows.html)
 community workflows, and that applies to everything in this repo too. Read a
 workflow before you install it — they are short, and this one is four steps.
