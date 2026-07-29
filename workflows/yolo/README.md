@@ -65,6 +65,22 @@ Four `command` steps, no gates, no shell:
 | `tasks` | `speckit.tasks` |
 | `implement` | `speckit.implement` |
 
+```mermaid
+flowchart TB
+    A["specify<br/>(command)"] --> B["plan<br/>(command)"]
+    B --> C["tasks<br/>(command)"]
+    C --> D["implement<br/>(command)"]
+
+    style A fill:#49a,color:#fff
+    style B fill:#49a,color:#fff
+    style C fill:#49a,color:#fff
+    style D fill:#49a,color:#fff
+```
+
+For contrast, the built-in `speckit` workflow interposes a `gate` step after
+`specify` and again after `plan`, each of which pauses the run until you approve
+it. YOLO is that graph with the two gates removed.
+
 ## Requirements
 
 Spec Kit `>=0.8.5` — the first release that resolves `integration: "auto"`
