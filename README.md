@@ -15,7 +15,7 @@ to be copy-pasted into `.specify/` by hand.
 
 | ID | Version | Description |
 |---|---|---|
-| [`yolo`](workflows/yolo/) | 0.1.0 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
+| [`yolo`](workflows/yolo/) | 0.1.1 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
 
 
 #### Install
@@ -38,7 +38,7 @@ To install a single workflow without registering the catalog:
 
 ```bash
 specify workflow add yolo --from \
-  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.0/workflows/yolo/workflow.yml
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.1/workflows/yolo/workflow.yml
 ```
 
 Then set to work:
@@ -58,7 +58,7 @@ separate catalog for each add-on type, so each one is registered separately.
 ## Versioning
 
 Each add-on is versioned and tagged independently, as `<id>-v<version>` — for
-example `yolo-v0.1.0`. Catalog entries pin their install URL to a tag, never to
+example `yolo-v0.1.1`. Catalog entries pin their install URL to a tag, never to
 a branch, so an install is reproducible and a change never reaches existing
 users until they run `specify workflow update`.
 

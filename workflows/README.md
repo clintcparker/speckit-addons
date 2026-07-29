@@ -7,7 +7,7 @@ installable.
 
 | ID | Version | Description |
 |---|---|---|
-| [`yolo`](yolo/) | 0.1.0 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
+| [`yolo`](yolo/) | 0.1.1 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
 
 ## Install
 

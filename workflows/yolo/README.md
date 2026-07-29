@@ -41,7 +41,7 @@ Or install this one workflow directly, without registering the catalog:
 
 ```bash
 specify workflow add yolo --from \
-  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.0/workflows/yolo/workflow.yml
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.1/workflows/yolo/workflow.yml
 ```
 
 ## Inputs
@@ -83,9 +83,10 @@ it. YOLO is that graph with the two gates removed.
 
 ## Requirements
 
-Spec Kit `>=0.8.5` — the first release that resolves `integration: "auto"`
-engine-side. On older versions `auto` is treated as a literal integration name
-and dispatch fails.
+Spec Kit `>=0.8.12` — the first release that resolves `integration: "auto"`
+engine-side ([spec-kit #2421](https://github.com/github/spec-kit/pull/2421)). On
+older versions `auto` is treated as a literal integration name and dispatch
+fails.
 
 The `requires.integrations` list names `claude` as an advisory compatibility
 hint, not a restriction. All four commands are core Spec Kit commands that every
