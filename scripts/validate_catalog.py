@@ -114,6 +114,19 @@ ADDON_TYPES = (
         url_kind="external",
         extra_required_fields=("download_url", "repository", "sha256"),
     ),
+    AddonType(
+        directory="bundles",
+        catalog_key="bundles",
+        url_field="download_url",
+        url_kind="release-asset",
+        manifest="bundle.yml",
+        manifest_section="bundle",
+        # A bundle id may collide with a workflow id -- `send-it` is both. The
+        # prefix keeps their release tags distinct so the two can be versioned
+        # independently.
+        tag_prefix="bundle-",
+        extra_required_fields=("download_url", "role", "sha256"),
+    ),
 )
 
 
@@ -470,6 +483,79 @@ def validate_entry_urls(
             )
 
 
+def validate_bundle_components(report: Report) -> None:
+    """Check every bundle's pinned components against this repo's catalogs.
+
+    A bundle installs its components *by id through the catalog stack*, and the
+    bundler refuses when the resolved version differs from the pin. A bundle
+    that pins a version this repo does not publish therefore fails at install
+    time for the user and never here -- exactly the silent breakage this script
+    exists to prevent.
+    """
+    bundles_dir = REPO_ROOT / "bundles"
+    if not bundles_dir.is_dir():
+        return
+
+    published: dict[str, dict[str, str]] = {}
+    for addon_type in ADDON_TYPES:
+        if addon_type.catalog_key == "bundles":
+            continue
+        catalog = load_json(REPO_ROOT / addon_type.directory / "catalog.json", report)
+        if catalog is None:
+            continue
+        entries = catalog.get(addon_type.catalog_key)
+        if not isinstance(entries, dict):
+            continue
+        published[addon_type.catalog_key] = {
+            addon_id: str(entry.get("version"))
+            for addon_id, entry in entries.items()
+            if isinstance(entry, dict)
+        }
+
+    for child in sorted(bundles_dir.iterdir()):
+        manifest_path = child / "bundle.yml"
+        if not child.is_dir() or not manifest_path.is_file():
+            continue
+        manifest = load_yaml(manifest_path, report)
+        if manifest is None:
+            continue
+        provides = manifest.get("provides")
+        if not isinstance(provides, dict):
+            continue
+        where = rel(manifest_path)
+        for kind, refs in provides.items():
+            if not isinstance(refs, list):
+                continue
+            available = published.get(kind)
+            if available is None:
+                report.fail(
+                    where,
+                    f"provides.{kind} pins components of a kind this repo does "
+                    f"not publish -- there is no {kind}/catalog.json",
+                )
+                continue
+            for ref in refs:
+                if not isinstance(ref, dict):
+                    report.fail(where, f"each provides.{kind} entry must be a mapping")
+                    continue
+                ref_id = ref.get("id")
+                ref_version = str(ref.get("version"))
+                if ref_id not in available:
+                    report.fail(
+                        where,
+                        f"provides.{kind} pins {ref_id!r}, which is not in "
+                        f"{kind}/catalog.json",
+                    )
+                    continue
+                report.check(
+                    available[ref_id] == ref_version,
+                    where,
+                    f"provides.{kind} pins {ref_id!r} at {ref_version!r} but "
+                    f"{kind}/catalog.json publishes {available[ref_id]!r} -- "
+                    f"the bundler refuses an install when these disagree",
+                )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -482,6 +568,7 @@ def main() -> int:
     report = Report()
     for addon_type in ADDON_TYPES:
         validate_addon_type(addon_type, args.check_urls, report)
+    validate_bundle_components(report)
 
     if report.failures:
         print(f"{len(report.failures)} problem(s) found:\n", file=sys.stderr)

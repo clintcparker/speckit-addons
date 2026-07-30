@@ -1,0 +1,45 @@
+schema_version: "1.0"
+bundle:
+  id: "send-it"
+  name: "Send It — spec to PR, unattended"
+  version: "0.1.0"
+  role: "solo-dev"
+  description: "yolo-style full SDD cycle in a worktree, shipped to an open PR with zero prompts"
+  author: "clintcparker"
+  license: "MIT"
+
+requires:
+  # 0.14.2 is the release this bundle's machinery was verified against: the
+  # bundler resolves components by id through the registered catalog stacks and
+  # enforces each pinned version at install time.
+  speckit_version: ">=0.14.2"
+  tools:
+    - "git"
+    - "gh"
+
+# No `integration:` pin -- the bundle stays integration-agnostic, like the
+# workflows it ships. It inherits whatever the project was initialized with.
+
+provides:
+  extensions:
+    - id: "worktrees"
+      version: "1.3.2"
+    - id: "ship"
+      version: "1.0.0"
+    - id: "staff-review"
+      version: "1.0.0"
+    - id: "qa"
+      version: "1.0.0"
+  workflows:
+    - id: "send-it"
+      version: "0.1.0"
+    - id: "send-it-checked"
+      version: "0.1.0"
+
+tags:
+  - "sdd"
+  - "automation"
+  - "release"
+  - "pull-request"
+  - "worktree"
+  - "unattended"
