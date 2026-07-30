@@ -114,19 +114,19 @@ ADDON_TYPES = (
         url_kind="external",
         extra_required_fields=("download_url", "repository", "sha256"),
     ),
-    AddonType(
-        directory="bundles",
-        catalog_key="bundles",
-        url_field="download_url",
-        url_kind="release-asset",
-        manifest="bundle.yml",
-        manifest_section="bundle",
-        # A bundle id may collide with a workflow id -- `send-it` is both. The
-        # prefix keeps their release tags distinct so the two can be versioned
-        # independently.
-        tag_prefix="bundle-",
-        extra_required_fields=("download_url", "role", "sha256"),
-    ),
+    # AddonType(
+    #     directory="bundles",
+    #     catalog_key="bundles",
+    #     url_field="download_url",
+    #     url_kind="release-asset",
+    #     manifest="bundle.yml",
+    #     manifest_section="bundle",
+    #     # A bundle id may collide with a workflow id -- `send-it` is both. The
+    #     # prefix keeps their release tags distinct so the two can be versioned
+    #     # independently.
+    #     tag_prefix="bundle-",
+    #     extra_required_fields=("download_url", "role", "sha256"),
+    # ),
 )
 
 
