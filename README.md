@@ -11,24 +11,22 @@ to be copy-pasted into `.specify/` by hand.
 
 ## Add-ons
 
+Spec Kit keeps a **separate catalog for each add-on type**, and registering one
+does not register the others. Each section below has its own `catalog add`.
+
 ### Workflows
 
 | ID | Version | Description |
 |---|---|---|
 | [`yolo`](workflows/yolo/) | 0.1.1 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
-
-
-#### Install
-
-Register this repo's workflow catalog once, per project or per user:
+| [`send-it`](workflows/send-it/) | 0.1.0 | Spec to PR, unattended — `yolo` plus `ship`, ending in an open pull request |
+| [`send-it-checked`](workflows/send-it-checked/) | 0.1.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
 
 ```bash
 specify workflow catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/workflows/catalog.json
 specify workflow add yolo
 ```
-
-_OR_
 
 Registering the catalog also means every workflow published here later is
 available with no further setup — `specify workflow list` and
@@ -44,16 +42,60 @@ specify workflow add yolo --from \
 Then set to work:
 
 ```bash
-
 specify workflow run yolo -i spec="make the app do the thing"
 ```
 
+### Extensions
 
+Pointers, not code — every entry pins somebody else's repository at a tag and a
+digest. See [extensions/README.md](extensions/README.md).
+
+| ID | Version | Upstream |
+|---|---|---|
+| `worktrees` | 1.3.2 | [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) |
+| `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) |
+| `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) |
+| `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) |
+
+```bash
+specify extension catalog add \
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
+  --name speckit-addons --install-allowed --priority 5
+specify extension add ship
+```
+
+`--install-allowed` is not the default; without it every install is refused.
+
+### Bundles
+
+| ID | Version | Description |
+|---|---|---|
+| [`send-it`](bundles/send-it/) | 0.1.0 | Spec to PR, unattended — four extensions plus both `send-it` workflows |
+
+```bash
+specify bundle catalog add \
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/main/bundles/catalog.json \
+  --id speckit-addons --policy install-allowed --priority 5
+specify bundle install send-it
+```
+
+A bundle resolves its components through *your* registered catalogs, so
+`send-it` needs the workflow and extension catalogs registered too. Its
+[README](bundles/send-it/README.md#install) has all three commands and the
+one-line post-install edit.
+
+### A gotcha worth knowing
+
+Registering a **workflow** or **extension** catalog for a project *replaces*
+Spec Kit's built-in `default` + `community` sources for that type — the project
+config is read instead of them, not alongside. The **bundle** stack is the
+exception: it merges. If you want the official catalogs back after registering
+this one, add them explicitly and check with `specify <type> catalog list`.
 
 ### More
-Presets, extensions, and bundles will appear here as they are published, each
-with its own catalog under a directory of the same name. Spec Kit keeps a
-separate catalog for each add-on type, so each one is registered separately.
+
+Presets will appear here if they are ever published, each with its own catalog
+under a directory of the same name.
 
 ## Versioning
 
@@ -82,6 +124,16 @@ Two things worth understanding about the execution model:
 And specific to this repo: `yolo` deliberately removes the human review gates
 that the built-in `speckit` workflow provides. That is its whole purpose. Run it
 on a branch.
+
+`send-it` and `send-it-checked` go further than `yolo`: they commit, rebase,
+push, and open a pull request without asking. Point `target_branch` at a branch
+you are happy to see a PR against.
+
+The extension catalog published here points at four repositories this project
+does not control. They are unreviewed third-party code that runs with your full
+privileges. Each entry pins a tag *and* a SHA-256 of that tag's archive, so a
+re-pointed tag fails the install rather than swapping the code silently — but a
+pin is not a review. See [extensions/README.md](extensions/README.md#trust).
 
 ## Contributing
 

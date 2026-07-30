@@ -64,6 +64,9 @@ must not reach existing users automatically.
    you push the tag. Add the flag only once the tag is up.
 
 5. Commit, then tag `<id>-v<version>` and push the tag.
+6. If a bundle ships this workflow, update its `provides.workflows` pin in
+   `bundles/<id>/bundle.yml` too. The validator fails when a bundle pin and a
+   catalog version disagree, because the bundler refuses that install.
 
 ## Releasing a new version
 
@@ -80,3 +83,88 @@ a version bump on the others.
 
 Existing users stay on the version they installed until they run
 `specify workflow update`.
+
+## Releasing an extension catalog change
+
+`extensions/catalog.json` holds pointers, not code, so there is no tag of ours
+to cut. To bump a pinned upstream version:
+
+1. **Read the upstream diff.** A version bump means the third-party code that
+   runs with your full privileges changed. Pinning without reading defeats the
+   point of pinning.
+2. Recompute the digest of the new tag archive:
+
+   ```bash
+   curl -sL "<download_url>" | shasum -a 256
+   ```
+
+3. Update `version`, `download_url`, `sha256`, `documentation`, `changelog`,
+   and the entry's `updated_at`, plus the catalog's top-level `updated_at`.
+4. Update the tables in `extensions/README.md` and the root `README.md`.
+5. Update any `bundles/*/bundle.yml` that pins the old version — the validator
+   fails if a bundle pin and the catalog disagree, because the bundler refuses
+   that install.
+6. Run the validator, commit, push. No tag.
+
+## Releasing a bundle
+
+Bundles tag as `bundle-<id>-v<version>` — the `bundle-` prefix keeps a bundle's
+tag distinct from a same-named workflow's.
+
+1. Bump `bundle.version` in `bundles/<id>/bundle.yml` and add a `CHANGELOG.md`
+   entry. Finish every edit inside `bundles/<id>/` before the next step — the
+   whole directory is packaged, so a later doc tweak changes the artifact.
+2. Validate and build:
+
+   ```bash
+   specify bundle validate --path bundles/<id> --offline
+   specify bundle build --path bundles/<id> --output /tmp/speckit-addons-build
+   shasum -a 256 /tmp/speckit-addons-build/<id>-<version>.zip
+   ```
+
+   Reference warnings from `validate` are expected — this repo is not a Spec
+   Kit project, so there is no catalog stack here to resolve against. Structural
+   errors are not.
+3. Update the `bundles/catalog.json` entry's `version`, `download_url` tag,
+   `sha256`, `documentation`, `changelog`, `provides` counts, and `updated_at`
+   — plus the catalog's own top-level `updated_at`.
+4. Update the tables in `bundles/README.md` and the root `README.md`.
+5. Run the validator, commit, then tag `bundle-<id>-v<version>` and push the tag.
+6. Create the GitHub Release on that tag and attach the built `.zip`:
+
+   ```bash
+   gh release create bundle-<id>-v<version> \
+     /tmp/speckit-addons-build/<id>-<version>.zip \
+     --title "<id> <version>" --notes-file bundles/<id>/CHANGELOG.md
+   ```
+
+   The build is reproducible, so rebuilding from the tagged commit gives the
+   same bytes and the same digest.
+7. Verify the pinned URLs now resolve:
+
+   ```bash
+   uv run --with pyyaml python scripts/validate_catalog.py --check-urls
+   ```
+
+8. Install-test from a clean project with all three catalogs registered:
+
+   ```bash
+   mkdir /tmp/send-it-smoke && cd /tmp/send-it-smoke
+   specify init . --ai claude
+   specify bundle catalog add \
+     https://raw.githubusercontent.com/clintcparker/speckit-addons/main/bundles/catalog.json \
+     --id speckit-addons --policy install-allowed --priority 5
+   specify workflow catalog add \
+     https://raw.githubusercontent.com/clintcparker/speckit-addons/main/workflows/catalog.json \
+     --name speckit-addons
+   specify extension catalog add \
+     https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
+     --name speckit-addons --install-allowed --priority 5
+   specify bundle install send-it
+   specify extension list
+   specify workflow list
+   ```
+
+   Expect four extensions and two workflows installed. Note that the workflow
+   and extension `catalog add` calls replace their built-in stacks in that
+   project, which is fine for a smoke test.
