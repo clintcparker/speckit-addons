@@ -35,7 +35,7 @@ Each of these was confirmed explicitly during design review.
 
 ## Composition
 
-`specify bundle add send-it` installs, via the bundle manifest's
+`specify bundle install send-it` installs, via the bundle manifest's
 `provides` lists (each pinned to a version, resolved through the user's
 registered catalog stacks):
 
@@ -209,7 +209,7 @@ with a step graph per repo convention.
 ### 5. Post-install: hook policy (documented, one edit)
 
 Ship, staff-review, and qa all self-register `after_implement` hooks. Per
-decision #6, after `specify bundle add send-it` the user makes one edit to
+decision #6, after `specify bundle install send-it` the user makes one edit to
 `.specify/extensions.yml`, setting `enabled: false` on those three hooks.
 The bundle README shows the exact YAML. The worktrees `after_specify` hook is
 left enabled.
@@ -234,7 +234,10 @@ daily driver needs.
   from the workflow stack; my distribution-model notes confirm registering one
   does not cover the others).
 - `workflows/README.md` release procedure: extend to cover bundle builds
-  (`specify bundle build`, GitHub Release with the zip asset, sha256).
+  (`specify bundle validate`, then `specify bundle build`, GitHub Release with
+  the zip asset, sha256). Per the upstream bundle docs' publish guidance, the
+  procedure ends with an install test from a clean project with the extension
+  and bundle catalogs registered.
 
 ## What a run looks like (narrative, lean variant)
 
@@ -270,6 +273,10 @@ pass) between 3 and 4, and the PR description carries any surviving findings.
   unreviewed-by-maintainers community code (as this repo's own security
   section says of itself). Pinned versions were read before pinning; bumps
   require re-reading.
+- **Pin enforcement is install-time only.** The bundler's idempotency checks
+  are id-based, not version-aware: a component already present is skipped on
+  `install` without comparing versions. Bumped pins take effect via
+  `specify bundle update send-it`, not by re-running `install`.
 
 ## Out of scope
 
