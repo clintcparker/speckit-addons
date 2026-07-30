@@ -9,6 +9,7 @@ installable.
 |---|---|---|
 | [`yolo`](yolo/) | 0.1.1 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
 | [`send-it`](send-it/) | 0.1.0 | Spec to PR, unattended — `yolo` plus `ship`, ending in an open pull request |
+| [`send-it-checked`](send-it-checked/) | 0.1.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
 
 ## Install
 

@@ -1,0 +1,131 @@
+schema_version: "1.0"
+workflow:
+  id: "send-it-checked"
+  name: "Spec to PR, unattended, with review and QA"
+  version: "0.1.0"
+  author: "clintcparker"
+  description: "send-it plus staff review and QA, each with one fix-and-re-run pass, before shipping"
+
+requires:
+  # Same floor as yolo and send-it: engine-side ``integration: "auto"``.
+  speckit_version: ">=0.8.12"
+  integrations:
+    # Advisory compatibility hint, not a closed set.
+    any:
+      - "claude"
+
+inputs:
+  spec:
+    type: string
+    required: true
+    prompt: "Describe what you want to build"
+  integration:
+    type: string
+    default: "auto"
+    prompt: "Integration to use (e.g. claude, copilot, gemini; 'auto' uses the project's initialized integration)"
+  target_branch:
+    type: string
+    default: "main"
+    prompt: "Branch the pull request should target"
+
+steps:
+  - id: specify
+    command: speckit.specify
+    integration: "{{ inputs.integration }}"
+    input:
+      args: "{{ inputs.spec }}"
+
+  - id: plan
+    command: speckit.plan
+    integration: "{{ inputs.integration }}"
+    input:
+      args: "{{ inputs.spec }}"
+
+  - id: tasks
+    command: speckit.tasks
+    integration: "{{ inputs.integration }}"
+    input:
+      args: "{{ inputs.spec }}"
+
+  - id: implement
+    command: speckit.implement
+    integration: "{{ inputs.integration }}"
+    input:
+      args: "{{ inputs.spec }}"
+
+  # speckit.staff-review.run comes from the `staff-review` extension. It writes
+  # its report into FEATURE_DIR/reviews/, which is exactly the directory ship's
+  # pre-flight review check is gated on -- so this step is what makes the ship
+  # step's review gate real rather than skipped.
+  - id: review
+    command: speckit.staff-review.run
+    integration: "{{ inputs.integration }}"
+    input:
+      args: >-
+        UNATTENDED RUN — no user is present; never pause for input and never
+        ask a question.
+
+        Review the implementation against the spec and write the report to
+        FEATURE_DIR/reviews/ as usual.
+
+        If the verdict is CHANGES REQUIRED, fix every Blocker finding and then
+        re-run this review exactly once. After that second review, stop
+        reviewing whatever the verdict is and leave the report in place — the
+        ship step reports what remains.
+
+  # speckit.qa.run comes from the `qa` extension and writes into FEATURE_DIR/qa/,
+  # which gates ship's pre-flight QA check the same way.
+  - id: qa
+    command: speckit.qa.run
+    integration: "{{ inputs.integration }}"
+    input:
+      args: >-
+        UNATTENDED RUN — no user is present; never pause for input and never
+        ask a question.
+
+        Use CLI QA mode unless the project clearly already has browser
+        automation configured (Playwright, Puppeteer, Cypress, or Selenium
+        installed and usable without setup). Write the report to FEATURE_DIR/qa/
+        as usual.
+
+        If the verdict is FAILURES FOUND, fix the failing scenarios and re-run
+        QA exactly once. After that second run, stop whatever the verdict is
+        and leave the report in place — the ship step reports what remains.
+
+  - id: ship
+    command: speckit.ship.run
+    integration: "{{ inputs.integration }}"
+    input:
+      args: >-
+        Target branch: {{ inputs.target_branch }}.
+
+        UNATTENDED RUN — no user is present and no prompt can be answered.
+        Treat every confirmation this command would normally ask as answered
+        YES and continue without waiting: the readiness summary, the
+        rebase/merge confirmation, the push confirmation, the CHANGELOG
+        prepend confirmation, and the pull request creation confirmation.
+
+        Before the working-tree pre-flight check, commit every uncommitted
+        change with a descriptive conventional-commit message instead of
+        prompting to commit or stash.
+
+        If any tasks in tasks.md are still incomplete, do not stop — proceed
+        and list the incomplete tasks in the pull request description.
+
+        The review and QA reports in FEATURE_DIR/reviews/ and FEATURE_DIR/qa/
+        have already had their single remediation pass. If either still carries
+        a non-passing verdict, warnings, or unresolved findings, do not stop:
+        proceed with the ship and summarize every surviving finding under a
+        "Known issues" heading in the pull request description.
+
+        Prefer rebase over merge when synchronizing with the target branch.
+
+        Do not block on CI. If gh is unavailable, if no CI run exists yet for
+        the branch, or if a run is still in progress, proceed and record the
+        CI status in the pull request description rather than waiting. If CI
+        has already failed, still open the pull request and call the failure
+        out prominently in the description.
+
+        The one legitimate stop is a rebase conflict that cannot be resolved
+        trivially: leave the branch as it is for manual resolution and report
+        what happened. Never force-push.
