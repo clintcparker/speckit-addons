@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -37,42 +38,81 @@ RAW_BASE = f"https://raw.githubusercontent.com/{REPO_SLUG}"
 BLOB_BASE = f"https://github.com/{REPO_SLUG}/blob"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+# Entry fields every catalog entry must carry, whatever its type. Per-type
+# additions live in AddonType.extra_required_fields.
 REQUIRED_ENTRY_FIELDS = (
     "id",
     "name",
     "description",
     "author",
     "version",
-    "url",
     "license",
 )
 
 # Fields that document a specific release and must therefore be pinned to that
-# release's tag rather than to a moving branch.
+# release's tag rather than to a moving branch. Only meaningful for add-ons
+# whose source lives in this repo.
 TAG_PINNED_DOC_FIELDS = ("documentation", "changelog")
+
+# A well-formed SHA-256 hex digest, optionally "sha256:"-prefixed -- the same
+# shape specify-cli's verify_archive_sha256 accepts.
+SHA256_RE = re.compile(r"^(?:sha256:)?[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
 class AddonType:
-    """One of Spec Kit's four independent add-on catalog systems.
+    """One of Spec Kit's independent add-on catalog systems.
 
     Each type has its own catalog file, its own top-level key inside that file,
-    and its own manifest filename. Add a member to ``ADDON_TYPES`` below when
-    this repo starts publishing presets, extensions, or bundles.
+    and its own rules for what an entry's install URL must look like. The three
+    URL kinds differ because the add-ons differ in where their bits live:
+
+    ``raw-manifest``
+        The add-on's manifest is a file in this repo; the entry points at it on
+        raw.githubusercontent.com, pinned to the release tag.
+    ``release-asset``
+        The add-on is distributed as a built artifact attached to a GitHub
+        Release in this repo.
+    ``external``
+        This repo publishes only a pointer -- the bits belong to somebody else.
+        Nothing is on disk here and nothing is tagged here; the entry must
+        instead pin a third-party tag archive and carry a sha256.
     """
 
     directory: str  # repo directory holding this type's add-ons
     catalog_key: str  # top-level key inside catalog.json
-    manifest: str  # per-add-on manifest filename
-    manifest_section: str  # top-level key inside the manifest holding id/version
+    url_field: str  # entry field holding the install URL
+    url_kind: str  # "raw-manifest" | "release-asset" | "external"
+    manifest: str | None = None  # per-add-on manifest filename, if any
+    manifest_section: str | None = None  # top-level key inside the manifest
+    tag_prefix: str = ""  # release tag is f"{tag_prefix}{id}-v{version}"
+    extra_required_fields: tuple[str, ...] = ()
+
+    @property
+    def has_local_addons(self) -> bool:
+        """True when each entry must have a directory and manifest on disk."""
+        return self.manifest is not None
+
+    def tag_for(self, addon_id: str, version: str) -> str:
+        return f"{self.tag_prefix}{addon_id}-v{version}"
 
 
 ADDON_TYPES = (
     AddonType(
         directory="workflows",
         catalog_key="workflows",
+        url_field="url",
+        url_kind="raw-manifest",
         manifest="workflow.yml",
         manifest_section="workflow",
+        extra_required_fields=("url",),
+    ),
+    AddonType(
+        directory="extensions",
+        catalog_key="extensions",
+        url_field="download_url",
+        url_kind="external",
+        extra_required_fields=("download_url", "repository", "sha256"),
     ),
 )
 
@@ -141,6 +181,14 @@ def validate_addon_type(
 ) -> None:
     type_dir = REPO_ROOT / addon_type.directory
     if not type_dir.is_dir():
+        # Every type in ADDON_TYPES is one this repo publishes. A missing
+        # directory is a broken repo, not an opted-out add-on type -- silently
+        # skipping it is precisely the invisible failure this script exists to
+        # catch.
+        report.fail(
+            addon_type.directory,
+            f"is declared in ADDON_TYPES but {addon_type.directory}/ does not exist",
+        )
         return
 
     catalog_path = type_dir / "catalog.json"
@@ -176,11 +224,15 @@ def validate_addon_type(
         )
         return
 
-    on_disk = {
-        child.name
-        for child in sorted(type_dir.iterdir())
-        if child.is_dir() and not child.name.startswith(".")
-    }
+    on_disk = (
+        {
+            child.name
+            for child in sorted(type_dir.iterdir())
+            if child.is_dir() and not child.name.startswith(".")
+        }
+        if addon_type.has_local_addons
+        else set()
+    )
 
     for missing in sorted(on_disk - set(entries)):
         report.fail(
@@ -217,7 +269,8 @@ def validate_entry(
         report.fail(where, "entry must be an object")
         return
 
-    for field in REQUIRED_ENTRY_FIELDS:
+    required = REQUIRED_ENTRY_FIELDS + addon_type.extra_required_fields
+    for field in required:
         report.check(
             bool(entry.get(field)), where, f'missing required field "{field}"'
         )
@@ -228,24 +281,58 @@ def validate_entry(
         f'entry "id" is {entry.get("id")!r} but its catalog key is {addon_id!r}',
     )
 
-    if addon_id not in on_disk:
-        report.fail(
-            where,
-            f"no {addon_type.directory}/{addon_id}/ directory on disk",
-        )
+    entry_version = entry.get("version")
+
+    if addon_type.has_local_addons:
+        if addon_id not in on_disk:
+            report.fail(
+                where,
+                f"no {addon_type.directory}/{addon_id}/ directory on disk",
+            )
+            return
+        if not manifest_agrees(
+            addon_type=addon_type,
+            addon_id=addon_id,
+            entry_version=entry_version,
+            where=where,
+            report=report,
+        ):
+            # A version we cannot trust makes every URL check below meaningless.
+            return
+    elif not entry_version:
         return
 
+    validate_entry_urls(
+        addon_type=addon_type,
+        addon_id=addon_id,
+        entry=entry,
+        entry_version=entry_version,
+        where=where,
+        check_urls=check_urls,
+        report=report,
+    )
+
+
+def manifest_agrees(
+    *,
+    addon_type: AddonType,
+    addon_id: str,
+    entry_version: Any,
+    where: str,
+    report: Report,
+) -> bool:
+    """Check the on-disk manifest against the catalog entry. False == distrust."""
     manifest_path = REPO_ROOT / addon_type.directory / addon_id / addon_type.manifest
     if not manifest_path.is_file():
         report.fail(
             f"{addon_type.directory}/{addon_id}",
             f"missing {addon_type.manifest}",
         )
-        return
+        return False
 
     manifest = load_yaml(manifest_path, report)
     if manifest is None:
-        return
+        return False
 
     section = manifest.get(addon_type.manifest_section)
     if not isinstance(section, dict):
@@ -253,7 +340,7 @@ def validate_entry(
             rel(manifest_path),
             f'missing "{addon_type.manifest_section}" mapping',
         )
-        return
+        return False
 
     manifest_id = section.get("id")
     manifest_version = section.get("version")
@@ -265,7 +352,6 @@ def validate_entry(
         f"is named {addon_id!r} -- Spec Kit installs by id, so these must match",
     )
 
-    entry_version = entry.get("version")
     report.check(
         manifest_version == entry_version,
         where,
@@ -273,46 +359,114 @@ def validate_entry(
         f"{addon_type.manifest}'s {manifest_version!r}",
     )
 
-    # A version we cannot trust makes every URL check below meaningless.
-    if manifest_version != entry_version or not entry_version:
-        return
+    return bool(entry_version) and manifest_version == entry_version
 
-    tag = f"{addon_id}-v{entry_version}"
-    expected_url = (
-        f"{RAW_BASE}/{tag}/{addon_type.directory}/{addon_id}/{addon_type.manifest}"
-    )
-    url = entry.get("url")
-    report.check(
-        url == expected_url,
-        where,
-        f'"url" must be pinned to the release tag.\n'
-        f"      expected: {expected_url}\n"
-        f"      actual:   {url}",
-    )
 
+def validate_entry_urls(
+    *,
+    addon_type: AddonType,
+    addon_id: str,
+    entry: dict[str, Any],
+    entry_version: str,
+    where: str,
+    check_urls: bool,
+    report: Report,
+) -> None:
+    tag = addon_type.tag_for(addon_id, entry_version)
+    url = entry.get(addon_type.url_field)
+
+    if addon_type.url_kind == "raw-manifest":
+        expected = (
+            f"{RAW_BASE}/{tag}/{addon_type.directory}/{addon_id}/{addon_type.manifest}"
+        )
+        report.check(
+            url == expected,
+            where,
+            f'"{addon_type.url_field}" must be pinned to the release tag.\n'
+            f"      expected: {expected}\n"
+            f"      actual:   {url}",
+        )
+    elif addon_type.url_kind == "release-asset":
+        expected = (
+            f"https://github.com/{REPO_SLUG}/releases/download/{tag}/"
+            f"{addon_id}-{entry_version}.zip"
+        )
+        report.check(
+            url == expected,
+            where,
+            f'"{addon_type.url_field}" must point at the release asset.\n'
+            f"      expected: {expected}\n"
+            f"      actual:   {url}",
+        )
+    else:  # external
+        repository = str(entry.get("repository") or "").rstrip("/")
+        expected_suffix = f"/archive/refs/tags/v{entry_version}.zip"
+        report.check(
+            isinstance(url, str) and url.startswith("https://"),
+            where,
+            f'"{addon_type.url_field}" must be an HTTPS URL, got {url!r}',
+        )
+        report.check(
+            isinstance(url, str)
+            and bool(repository)
+            and url == f"{repository}{expected_suffix}",
+            where,
+            f'"{addon_type.url_field}" must be the upstream tag archive for the '
+            f"pinned version.\n"
+            f"      expected: {repository}{expected_suffix}\n"
+            f"      actual:   {url}",
+        )
+
+    # Digests: required wherever the entry declares one (external entries always
+    # do). A malformed digest silently disables verification in specify-cli's
+    # older code paths, so check the shape, not just the presence.
+    sha256 = entry.get("sha256")
+    if sha256 is not None:
+        report.check(
+            isinstance(sha256, str) and bool(SHA256_RE.match(sha256)),
+            where,
+            f'"sha256" must be a 64-character hex digest, got {sha256!r}',
+        )
+
+    # Doc links: pinned to this repo's tag for our own add-ons; for external
+    # add-ons they belong to the upstream repo and are only required to live
+    # under it.
     for field in TAG_PINNED_DOC_FIELDS:
         value = entry.get(field)
         if not value:
             continue
-        report.check(
-            value.startswith(f"{BLOB_BASE}/{tag}/"),
-            where,
-            f'"{field}" must be pinned to {tag}, got {value!r}',
-        )
+        if addon_type.url_kind == "external":
+            repository = str(entry.get("repository") or "").rstrip("/")
+            report.check(
+                bool(repository) and value.startswith(f"{repository}/"),
+                where,
+                f'"{field}" must live under the upstream repository '
+                f"{repository!r}, got {value!r}",
+            )
+        else:
+            report.check(
+                value.startswith(f"{BLOB_BASE}/{tag}/"),
+                where,
+                f'"{field}" must be pinned to {tag}, got {value!r}',
+            )
 
     if not check_urls:
         return
 
-    for field in ("url", *TAG_PINNED_DOC_FIELDS):
+    for field in (addon_type.url_field, *TAG_PINNED_DOC_FIELDS):
         value = entry.get(field)
         if not value:
             continue
         problem = url_resolves(value)
         if problem:
+            hint = (
+                "      Has the upstream tag been deleted or re-pointed?"
+                if addon_type.url_kind == "external"
+                else f"      Has the {tag} tag been pushed?"
+            )
             report.fail(
                 where,
-                f'"{field}" does not resolve ({problem}) -- {value}\n'
-                f"      Has the {tag} tag been pushed?",
+                f'"{field}" does not resolve ({problem}) -- {value}\n{hint}',
             )
 
 
