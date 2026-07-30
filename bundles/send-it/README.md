@@ -67,6 +67,15 @@ entries under `hooks.after_implement`:
 
 ```yaml
 hooks:
+  after_specify:
+    - extension: worktrees
+      command: speckit.worktrees.create
+      enabled: true           # ← leave this one alone: it is the isolation
+      optional: false
+      priority: 10
+      prompt: Execute speckit.worktrees.create?
+      description: Auto-spawn a worktree after a new feature is specified
+      condition: null
   after_implement:
     - extension: ship
       command: speckit.ship.run
@@ -92,19 +101,11 @@ hooks:
       prompt: Run QA testing?
       description: Validates acceptance criteria through browser-driven or CLI-based testing
       condition: null
-  after_specify:
-    - extension: worktrees
-      command: speckit.worktrees.create
-      enabled: true           # ← leave this one alone: it is the isolation
-      optional: false
-      priority: 10
-      prompt: Execute speckit.worktrees.create?
-      description: Auto-spawn a worktree after a new feature is specified
-      condition: null
 ```
 
-Change nothing but the three `enabled` values; the other fields are written by
-the installer and may differ slightly in your file.
+Change nothing but the three `enabled` values under `after_implement`; the
+other fields are written by the installer, and long `description` values are
+line-wrapped in the file it writes.
 
 **Do not use `specify extension disable ship`** for this. That command also
 unregisters the extension's commands, and the workflow steps need
