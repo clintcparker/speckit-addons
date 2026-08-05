@@ -8,6 +8,7 @@ layout is one that specify-cli's install_from_zip actually accepts.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -37,6 +38,8 @@ def sample(tmp_path):
     ext = tmp_path / "src" / "demo"
     (ext / "commands").mkdir(parents=True)
     (ext / "scripts" / "bash").mkdir(parents=True)
+    (ext / "__pycache__").mkdir()
+    (ext / ".git").mkdir()
     (ext / "extension.yml").write_text(
         'schema_version: "1.0"\nextension:\n  id: demo\n  version: 1.2.3\n',
         encoding="utf-8",
@@ -45,7 +48,21 @@ def sample(tmp_path):
     script = ext / "scripts" / "bash" / "go.sh"
     script.write_text("#!/usr/bin/env bash\necho hi\n", encoding="utf-8")
     script.chmod(0o755)
+    # Excluded names (EXCLUDED_NAMES), including nested-directory cases to
+    # prove exclusion matches on any path component, not just the leaf name.
     (ext / ".DS_Store").write_text("junk", encoding="utf-8")
+    (ext / "Thumbs.db").write_text("junk", encoding="utf-8")
+    (ext / "__pycache__" / "mod.pyc").write_text("junk", encoding="utf-8")
+    (ext / ".git" / "config").write_text("junk", encoding="utf-8")
+    # Excluded suffixes (EXCLUDED_SUFFIXES), as bare top-level files so the
+    # suffix check is exercised independently of the directory-name check.
+    (ext / "cache.pyc").write_text("junk", encoding="utf-8")
+    (ext / "scratch.swp").write_text("junk", encoding="utf-8")
+    (ext / "backup.orig").write_text("junk", encoding="utf-8")
+    (ext / "patch.rej").write_text("junk", encoding="utf-8")
+    # Contains an excluded suffix as a substring ("orig") but does not end
+    # with it -- must survive, proving the suffix check is not over-eager.
+    (ext / "notes.orig.md").write_text("# notes\n", encoding="utf-8")
     return ext
 
 
@@ -67,12 +84,52 @@ def test_wraps_contents_in_a_single_top_level_dir(be, sample, tmp_path):
 def test_excludes_junk_files(be, sample, tmp_path):
     out = be.build_extension(sample, tmp_path / "dist")
     with zipfile.ZipFile(out) as zf:
-        assert not any(n.endswith(".DS_Store") for n in zf.namelist())
+        names = set(zf.namelist())
+
+    excluded_names = {
+        "demo/.DS_Store",
+        "demo/Thumbs.db",
+        "demo/__pycache__/mod.pyc",
+        "demo/.git/config",
+        "demo/cache.pyc",
+        "demo/scratch.swp",
+        "demo/backup.orig",
+        "demo/patch.rej",
+    }
+    assert names.isdisjoint(excluded_names)
+
+    # The shipped files -- including the one that merely contains an
+    # excluded substring without matching it -- must still be present, so
+    # this test cannot pass by excluding everything.
+    shipped = {
+        "demo/extension.yml",
+        "demo/commands/run.md",
+        "demo/scripts/bash/go.sh",
+        "demo/notes.orig.md",
+    }
+    assert shipped <= names
 
 
 def test_is_byte_stable_across_builds(be, sample, tmp_path):
     first = (be.build_extension(sample, tmp_path / "a")).read_bytes()
     second = (be.build_extension(sample, tmp_path / "b")).read_bytes()
+    assert first == second
+
+
+def test_is_byte_stable_across_umasks(be, sample, tmp_path):
+    """A build's bytes must not depend on the host's umask.
+
+    external_attr is derived from the source file's actual mode bits, not
+    from a freshly-created file, so a differing umask on the building
+    machine must not perturb the digest.
+    """
+    original_umask = os.umask(0o022)
+    try:
+        first = be.build_extension(sample, tmp_path / "umask-022").read_bytes()
+        os.umask(0o077)
+        second = be.build_extension(sample, tmp_path / "umask-077").read_bytes()
+    finally:
+        os.umask(original_umask)
     assert first == second
 
 

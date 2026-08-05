@@ -82,13 +82,29 @@ def build_extension(extension_dir: Path, output_dir: Path) -> Path:
     if archive_path.exists():
         archive_path.unlink()
 
+    # ZIP_STORED (no compression), not ZIP_DEFLATED: these archives are small
+    # text trees (markdown, YAML, shell scripts), so compression saves a
+    # trivial number of kilobytes on a GitHub Release asset. DEFLATE's output
+    # bytes are not guaranteed stable across zlib versions/implementations
+    # even at a pinned compression level, so two builds of the same source
+    # tree on machines with different bundled zlib can legitimately diverge --
+    # exactly the failure this script exists to prevent. Reproducibility is
+    # worth more than the bytes here.
     with zipfile.ZipFile(
-        archive_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+        archive_path, "w", compression=zipfile.ZIP_STORED
     ) as archive:
         for source in collect_files(extension_dir):
             relative = source.relative_to(extension_dir).as_posix()
             info = zipfile.ZipInfo(f"{extension_id}/{relative}", date_time=ZIP_EPOCH)
-            info.compress_type = zipfile.ZIP_DEFLATED
+            # ZipFile.writestr() called with a ZipInfo ignores the
+            # archive-level compression= kwarg and honors
+            # ZipInfo.compress_type, so it must be set here too.
+            info.compress_type = zipfile.ZIP_STORED
+            # ZipInfo.create_system defaults from sys.platform (0 on Windows,
+            # 3 elsewhere) and that byte lands in the archive. Pin it to Unix
+            # explicitly so a Windows-built archive is byte-identical to a
+            # Unix-built one.
+            info.create_system = 3
             # Only git's executable bit is meaningful and portable; collapse
             # everything else so a stray umask cannot change the digest. The
             # installer re-applies exec bits via ensure_executable_scripts
