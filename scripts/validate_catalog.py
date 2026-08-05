@@ -77,21 +77,30 @@ class AddonType:
         This repo publishes only a pointer -- the bits belong to somebody else.
         Nothing is on disk here and nothing is tagged here; the entry must
         instead pin a third-party tag archive and carry a sha256.
+
+    ``locality`` says which of those a *type* may contain. ``extensions`` is
+    ``"mixed"``: first-party extensions live here and release as assets, while
+    third-party entries stay pointers. Locality is therefore decided per entry,
+    by whether the add-on's manifest is on disk -- not per type.
     """
 
     directory: str  # repo directory holding this type's add-ons
     catalog_key: str  # top-level key inside catalog.json
     url_field: str  # entry field holding the install URL
-    url_kind: str  # "raw-manifest" | "release-asset" | "external"
+    url_kind: str  # url kind for entries NOT hosted here
     manifest: str | None = None  # per-add-on manifest filename, if any
     manifest_section: str | None = None  # top-level key inside the manifest
     tag_prefix: str = ""  # release tag is f"{tag_prefix}{id}-v{version}"
     extra_required_fields: tuple[str, ...] = ()
+    hosted_url_kind: str | None = None  # url kind for entries hosted here
+    locality: str = "local-only"  # "local-only" | "pointer-only" | "mixed"
+    checks_config_templates: bool = False  # verify provides.config is installable
 
-    @property
-    def has_local_addons(self) -> bool:
-        """True when each entry must have a directory and manifest on disk."""
-        return self.manifest is not None
+    def hosted_here(self, addon_id: str) -> bool:
+        """True when this add-on's source lives in this repo."""
+        if self.manifest is None or self.locality == "pointer-only":
+            return False
+        return (REPO_ROOT / self.directory / addon_id / self.manifest).is_file()
 
     def tag_for(self, addon_id: str, version: str) -> str:
         return f"{self.tag_prefix}{addon_id}-v{version}"
@@ -103,16 +112,29 @@ ADDON_TYPES = (
         catalog_key="workflows",
         url_field="url",
         url_kind="raw-manifest",
+        # "local-only" means every entry is hosted here, so this is the kind
+        # actually consulted; url_kind stays set because the field is required,
+        # even though the not-hosted branch is unreachable for this type.
+        hosted_url_kind="raw-manifest",
         manifest="workflow.yml",
         manifest_section="workflow",
         extra_required_fields=("url",),
+        locality="local-only",
     ),
     AddonType(
         directory="extensions",
         catalog_key="extensions",
         url_field="download_url",
+        # Pointer entries pin somebody else's tag archive; first-party entries
+        # ship as release assets built from extensions/<id>/ in this repo.
         url_kind="external",
+        hosted_url_kind="release-asset",
+        manifest="extension.yml",
+        manifest_section="extension",
+        tag_prefix="ext-",
         extra_required_fields=("download_url", "repository", "sha256"),
+        locality="mixed",
+        checks_config_templates=True,
     ),
     # AddonType(
     #     directory="bundles",
@@ -243,7 +265,7 @@ def validate_addon_type(
             for child in sorted(type_dir.iterdir())
             if child.is_dir() and not child.name.startswith(".")
         }
-        if addon_type.has_local_addons
+        if addon_type.manifest is not None
         else set()
     )
 
@@ -259,7 +281,6 @@ def validate_addon_type(
             addon_type=addon_type,
             addon_id=addon_id,
             entry=entries[addon_id],
-            on_disk=on_disk,
             catalog_where=where,
             check_urls=check_urls,
             report=report,
@@ -271,7 +292,6 @@ def validate_entry(
     addon_type: AddonType,
     addon_id: str,
     entry: Any,
-    on_disk: set[str],
     catalog_where: str,
     check_urls: bool,
     report: Report,
@@ -296,13 +316,17 @@ def validate_entry(
 
     entry_version = entry.get("version")
 
-    if addon_type.has_local_addons:
-        if addon_id not in on_disk:
-            report.fail(
-                where,
-                f"no {addon_type.directory}/{addon_id}/ directory on disk",
-            )
-            return
+    hosted = addon_type.hosted_here(addon_id)
+
+    if addon_type.locality == "local-only" and not hosted:
+        report.fail(
+            where,
+            f"{addon_type.directory}/{addon_id}/{addon_type.manifest} is missing "
+            f"-- every entry of this type is published from this repo",
+        )
+        return
+
+    if hosted:
         if not manifest_agrees(
             addon_type=addon_type,
             addon_id=addon_id,
@@ -312,6 +336,10 @@ def validate_entry(
         ):
             # A version we cannot trust makes every URL check below meaningless.
             return
+        if addon_type.checks_config_templates:
+            config_templates_are_installable(
+                addon_type=addon_type, addon_id=addon_id, report=report
+            )
     elif not entry_version:
         return
 
@@ -322,6 +350,8 @@ def validate_entry(
         entry_version=entry_version,
         where=where,
         check_urls=check_urls,
+        hosted=hosted,
+        url_kind=(addon_type.hosted_url_kind if hosted else addon_type.url_kind),
         report=report,
     )
 
@@ -375,6 +405,65 @@ def manifest_agrees(
     return bool(entry_version) and manifest_version == entry_version
 
 
+def config_templates_are_installable(
+    *, addon_type: AddonType, addon_id: str, report: Report
+) -> None:
+    """Check provides.config against what Spec Kit will actually deploy.
+
+    ``ExtensionManager.scaffold_config`` refuses any config target that is not a
+    top-level ``*-config.yml`` / ``*-config.local.yml`` file, because remove()
+    and the ``--force`` backup/restore path only preserve that shape. A
+    differently-named target is never deployed on install and is destroyed on
+    reinstall; a template file that does not exist is dropped just as quietly.
+    Both failures are invisible until somebody's adaptation disappears.
+    """
+    manifest_path = REPO_ROOT / addon_type.directory / addon_id / addon_type.manifest
+    manifest = load_yaml(manifest_path, report)
+    if manifest is None:
+        return
+
+    provides = manifest.get("provides")
+    if not isinstance(provides, dict):
+        return
+
+    where = rel(manifest_path)
+    entries = provides.get("config", [])
+    if not isinstance(entries, list):
+        report.fail(where, '"provides.config" must be a list')
+        return
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            report.fail(where, "each provides.config entry must be a mapping")
+            continue
+
+        template = entry.get("template")
+        if not isinstance(template, str) or not template:
+            report.fail(where, 'a provides.config entry has no "template"')
+            continue
+
+        report.check(
+            (manifest_path.parent / template).is_file(),
+            where,
+            f"provides.config template {template!r} does not exist in "
+            f"{addon_type.directory}/{addon_id}/",
+        )
+
+        name = entry.get("name") or template
+        report.check(
+            isinstance(name, str)
+            and "/" not in name
+            and "\\" not in name
+            and (
+                name.endswith("-config.yml") or name.endswith("-config.local.yml")
+            ),
+            where,
+            f"provides.config name {name!r} does not survive "
+            f"'specify extension add --force' -- it must be a top-level file "
+            f"ending in '-config.yml' or '-config.local.yml'",
+        )
+
+
 def validate_entry_urls(
     *,
     addon_type: AddonType,
@@ -383,12 +472,14 @@ def validate_entry_urls(
     entry_version: str,
     where: str,
     check_urls: bool,
+    hosted: bool,
+    url_kind: str,
     report: Report,
 ) -> None:
     tag = addon_type.tag_for(addon_id, entry_version)
     url = entry.get(addon_type.url_field)
 
-    if addon_type.url_kind == "raw-manifest":
+    if url_kind == "raw-manifest":
         expected = (
             f"{RAW_BASE}/{tag}/{addon_type.directory}/{addon_id}/{addon_type.manifest}"
         )
@@ -399,7 +490,7 @@ def validate_entry_urls(
             f"      expected: {expected}\n"
             f"      actual:   {url}",
         )
-    elif addon_type.url_kind == "release-asset":
+    elif url_kind == "release-asset":
         expected = (
             f"https://github.com/{REPO_SLUG}/releases/download/{tag}/"
             f"{addon_id}-{entry_version}.zip"
@@ -448,7 +539,7 @@ def validate_entry_urls(
         value = entry.get(field)
         if not value:
             continue
-        if addon_type.url_kind == "external":
+        if not hosted:
             repository = str(entry.get("repository") or "").rstrip("/")
             report.check(
                 bool(repository) and value.startswith(f"{repository}/"),
@@ -474,7 +565,7 @@ def validate_entry_urls(
         if problem:
             hint = (
                 "      Has the upstream tag been deleted or re-pointed?"
-                if addon_type.url_kind == "external"
+                if not hosted
                 else f"      Has the {tag} tag been pushed?"
             )
             report.fail(

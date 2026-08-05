@@ -20,7 +20,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: pip install pyyaml
+      - run: pip install pyyaml pytest
+
+      - name: Run tests
+        run: python -m pytest tests/ -q
 
       - name: Validate catalogs against add-ons on disk
         run: python scripts/validate_catalog.py
