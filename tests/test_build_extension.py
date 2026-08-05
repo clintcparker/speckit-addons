@@ -33,9 +33,13 @@ def be():
     return _load_module()
 
 
-@pytest.fixture
-def sample(tmp_path):
-    ext = tmp_path / "src" / "demo"
+def _write_sample_tree(ext: Path) -> None:
+    """Materialize the demo extension's source tree under ``ext``.
+
+    Shared by the ``sample`` fixture and any test that needs to build the
+    same logical tree fresh (e.g. under a controlled umask), so the two
+    never drift apart.
+    """
     (ext / "commands").mkdir(parents=True)
     (ext / "scripts" / "bash").mkdir(parents=True)
     (ext / "__pycache__").mkdir()
@@ -63,6 +67,12 @@ def sample(tmp_path):
     # Contains an excluded suffix as a substring ("orig") but does not end
     # with it -- must survive, proving the suffix check is not over-eager.
     (ext / "notes.orig.md").write_text("# notes\n", encoding="utf-8")
+
+
+@pytest.fixture
+def sample(tmp_path):
+    ext = tmp_path / "src" / "demo"
+    _write_sample_tree(ext)
     return ext
 
 
@@ -116,18 +126,43 @@ def test_is_byte_stable_across_builds(be, sample, tmp_path):
     assert first == second
 
 
-def test_is_byte_stable_across_umasks(be, sample, tmp_path):
+def test_is_byte_stable_across_umasks(be, tmp_path):
     """A build's bytes must not depend on the host's umask.
 
-    external_attr is derived from the source file's actual mode bits, not
-    from a freshly-created file, so a differing umask on the building
-    machine must not perturb the digest.
+    The ``sample`` fixture is deliberately *not* reused here: its files are
+    materialized once at fixture-setup time, before either umask is in
+    effect, so both builds would just read the same already-baked modes and
+    the test would pass no matter what the implementation does. Instead this
+    test creates two independent source trees from scratch, each under a
+    different umask, so the regular (non-chmod'd) files' on-disk modes
+    genuinely differ going in -- e.g. two build machines, or two fresh
+    clones, with different ambient umasks. external_attr is derived from the
+    source file's mode collapsed to 0o755 (executable, via the explicit
+    chmod on scripts/bash/go.sh) or 0o644 (everything else, produced by
+    whatever the umask allowed), not from the raw umask-influenced mode, so
+    the two archives must still come out byte-identical.
     """
     original_umask = os.umask(0o022)
     try:
-        first = be.build_extension(sample, tmp_path / "umask-022").read_bytes()
+        tree_a = tmp_path / "src-022" / "demo"
+        _write_sample_tree(tree_a)
+        mode_a = (tree_a / "extension.yml").stat().st_mode & 0o777
+
         os.umask(0o077)
-        second = be.build_extension(sample, tmp_path / "umask-077").read_bytes()
+        tree_b = tmp_path / "src-077" / "demo"
+        _write_sample_tree(tree_b)
+        mode_b = (tree_b / "extension.yml").stat().st_mode & 0o777
+
+        assert mode_a != mode_b, (
+            "os.umask() had no effect on file permissions in this "
+            f"environment (both trees produced mode {oct(mode_a)} for a "
+            "freshly written file); this test cannot prove archive "
+            "byte-stability is umask-independent without two source trees "
+            "that genuinely differ in on-disk permission bits"
+        )
+
+        first = be.build_extension(tree_a, tmp_path / "umask-022").read_bytes()
+        second = be.build_extension(tree_b, tmp_path / "umask-077").read_bytes()
     finally:
         os.umask(original_umask)
     assert first == second
@@ -139,6 +174,24 @@ def test_preserves_the_executable_bit(be, sample, tmp_path):
         modes = {i.filename: i.external_attr >> 16 for i in zf.infolist()}
     assert modes["demo/scripts/bash/go.sh"] & 0o111
     assert not modes["demo/commands/run.md"] & 0o111
+
+
+def test_pins_archive_metadata_for_byte_stability(be, sample, tmp_path):
+    """Guards the two metadata pins the builder relies on for reproducibility.
+
+    ZIP_DEFLATED output is not guaranteed byte-stable across zlib versions
+    even at a fixed compression level, and ZipInfo.create_system defaults
+    from sys.platform (0 on Windows, 3 elsewhere). Both are pinned per-entry
+    in build_extension; this test fails loudly if either pin is ever
+    dropped or reintroduced incorrectly.
+    """
+    out = be.build_extension(sample, tmp_path / "dist")
+    with zipfile.ZipFile(out) as zf:
+        infos = zf.infolist()
+    assert infos, "archive unexpectedly has no entries"
+    for info in infos:
+        assert info.compress_type == zipfile.ZIP_STORED, info.filename
+        assert info.create_system == 3, info.filename
 
 
 def test_rejects_a_directory_without_a_manifest(be, tmp_path):
