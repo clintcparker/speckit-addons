@@ -7,6 +7,29 @@ ship step. Still unattended end to end; still ends in an open pull request.
 specify workflow run send-it-checked -i spec="add dark mode" -i target_branch=main
 ```
 
+## Requires
+
+| Extension | Why |
+|---|---|
+| [`ship`](https://github.com/arunt14/spec-kit-ship) | The `ship` step dispatches `speckit.ship.run` |
+| [`staff-review`](https://github.com/arunt14/spec-kit-staff-review) | The `review` step dispatches `speckit.staff-review.run` |
+| [`qa`](https://github.com/arunt14/spec-kit-qa) | The `qa` step dispatches `speckit.qa.run` |
+| [`screenshots`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots) | The two capture steps dispatch `speckit.screenshots.capture` |
+
+All four are hard dependencies: a missing extension means the step fails at
+dispatch. Spec Kit's workflow schema cannot declare this — `requires` accepts
+only `speckit_version` and `integrations` — so install them first:
+
+```bash
+specify extension catalog add \
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
+  --name speckit-addons --install-allowed --priority 5
+specify extension add ship staff-review qa screenshots
+```
+
+The worktree-first flow this workflow assumes additionally wants the `worktrees`
+and `git` extensions — see [docs/send-it-harness.md](../../docs/send-it-harness.md).
+
 ## Why this exists
 
 `send-it` skips review and QA. That is not a waiver — ship's pre-flight review
@@ -41,18 +64,22 @@ of them.
 flowchart TB
     A["specify<br/>(command)"] --> B["plan<br/>(command)"]
     B --> C["tasks<br/>(command)"]
-    C --> D["implement<br/>(command)"]
-    D --> E["review<br/>(command)"]
-    E --> F["qa<br/>(command)"]
-    F --> G["ship<br/>(command)"]
+    C --> D["screenshots-before<br/>(command)"]
+    D --> E["implement<br/>(command)"]
+    E --> F["review<br/>(command)"]
+    F --> G["qa<br/>(command)"]
+    G --> H["screenshots-after<br/>(command)"]
+    H --> I["ship<br/>(command)"]
 
     style A fill:#49a,color:#fff
     style B fill:#49a,color:#fff
     style C fill:#49a,color:#fff
     style D fill:#49a,color:#fff
-    style E fill:#6a5,color:#fff
+    style E fill:#49a,color:#fff
     style F fill:#6a5,color:#fff
-    style G fill:#a63,color:#fff
+    style G fill:#6a5,color:#fff
+    style H fill:#49a,color:#fff
+    style I fill:#a63,color:#fff
 ```
 
 | Step | Command | Provided by |
@@ -60,9 +87,11 @@ flowchart TB
 | `specify` | `speckit.specify` | core |
 | `plan` | `speckit.plan` | core |
 | `tasks` | `speckit.tasks` | core |
+| `screenshots-before` | `speckit.screenshots.capture` | `screenshots` extension |
 | `implement` | `speckit.implement` | core |
 | `review` | `speckit.staff-review.run` | `staff-review` extension |
 | `qa` | `speckit.qa.run` | `qa` extension |
+| `screenshots-after` | `speckit.screenshots.capture` | `screenshots` extension |
 | `ship` | `speckit.ship.run` | `ship` extension |
 
 Note that `/speckit.review` and `/speckit.qa`, which ship's own README
