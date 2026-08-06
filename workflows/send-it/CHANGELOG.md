@@ -5,6 +5,29 @@ All notable changes to the `send-it` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-06
+
+### Fixed
+- Worktree isolation is now an explicit first step rather than an inherited
+  `before_specify` hook side-effect. A run that did not begin at `speckit.specify` — a
+  resume, or a fix-up over an already-specified feature — previously got no worktree and
+  executed in the primary checkout, silently, and the branch could not be attached to a
+  worktree afterwards.
+- The ship step now surfaces a non-clean isolation outcome in the pull request
+  description: `worktree_isolation=failed` near the top with the branch named, and
+  `worktree_isolation=recovered` as a note that the primary checkout was moved to the
+  base ref.
+
+### Changed
+- The prose comment above `specify` that described the hook is replaced by the new
+  `worktree` step's own comment, so there is a single account of the mechanism.
+
+### Requires
+- The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+  extension, at **2.1.0 or later** for the idempotent case detection the step relies on.
+  The first step fails at dispatch without the extension. As with `screenshots`, Spec
+  Kit's workflow schema cannot express this, so it is a documentation-only contract.
+
 ## [0.2.0] — 2026-08-05
 
 ### Added
@@ -47,5 +70,6 @@ First published release.
   auto-commit the working tree, never block on CI, and stop only on a rebase
   conflict that cannot be resolved trivially.
 
+[0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.0
 [0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.2.0
 [0.1.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.1.0

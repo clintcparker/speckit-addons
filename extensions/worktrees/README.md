@@ -85,7 +85,17 @@ enter_worktree: true          # move the session into the new worktree; false to
 
 **`before_specify`** (priority 20) — creates the feature branch inside a new worktree and moves the session there *before* the spec is written. Controlled by the `auto_create` config value.
 
-This runs before rather than after `/speckit.specify` because a branch can live in exactly one worktree: if the spec were written first, `/speckit.specify` would create (and check out) the branch in the primary checkout, and `git worktree add` can never claim that branch afterward. Worktree-first avoids this failure mode by cutting the branch straight into its worktree, then writing the spec — and every later phase — there from the start.
+This runs before rather than after `/speckit.specify` because a branch can live in exactly one worktree: if the spec were written first, `/speckit.specify` would create (and check out) the branch in the primary checkout, and `git worktree add` cannot claim that branch for as long as the primary stays there. Worktree-first avoids this failure mode by cutting the branch straight into its worktree, then writing the spec — and every later phase — there from the start.
+
+### The hook is not enough on its own
+
+It fires only when a run actually *starts* at `/speckit.specify`. A resumed run, or a fix-up over a feature that was already specified, enters at a later phase, never triggers the hook, and executes entirely in the primary checkout — silently. Any workflow that must not depend on where a run entered should declare `speckit.worktrees.create` as an **explicit first step** as well. The command is idempotent as of 2.1.0 (`## Outline` step 0), so whichever of the two lands second finds the session already isolated and no-ops; there is no double-creation and no spurious second feature number.
+
+`speckit-addons`' own [`send-it`](../../workflows/send-it/), [`send-it-checked`](../../workflows/send-it-checked/) and [`yolo`](../../workflows/yolo/) workflows all do this.
+
+### When the branch is already checked out in the primary
+
+`git worktree add` cannot succeed until the primary moves off it. Step 0 recovers *only* when the primary is provably clean — `git status --porcelain` and `git stash list` both empty — by checking the primary out to the base ref, attaching the worktree, and reporting `worktree_isolation=recovered` along with the base ref the primary now sits on. A dirty tree or any stash entry falls back to `worktree_isolation=failed`: the run continues in place and reports loudly, and nothing of yours is moved, stashed, or forced.
 
 ## Script usage
 

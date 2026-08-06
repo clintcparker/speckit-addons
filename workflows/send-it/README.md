@@ -1,8 +1,8 @@
 # send-it — spec to PR, unattended
 
-Runs the complete Spec Kit cycle and then ships it: `specify` → `plan` →
-`tasks` → `screenshots (before)` → `implement` → `screenshots (after)` →
-`ship`. No review gates, no confirmations, no pauses. You describe what you
+Runs the complete Spec Kit cycle and then ships it: `worktree` → `specify` →
+`plan` → `tasks` → `screenshots (before)` → `implement` → `screenshots (after)`
+→ `ship`. No review gates, no confirmations, no pauses. You describe what you
 want and come back to an open pull request with before/after UI screenshots.
 
 ```bash
@@ -15,23 +15,36 @@ The pull request is the review gate. That is the whole design.
 
 | Extension | Why |
 |---|---|
+| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.1.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the idempotent case detection added in 2.1.0 |
 | [`ship`](https://github.com/arunt14/spec-kit-ship) | The `ship` step dispatches `speckit.ship.run` |
 | [`screenshots`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots) | The two capture steps dispatch `speckit.screenshots.capture` |
 
-Both are hard dependencies: a missing extension means the step fails at dispatch.
-Spec Kit's workflow schema cannot declare this — `requires` accepts only
+All three are hard dependencies: a missing extension means the step fails at
+dispatch. Spec Kit's workflow schema cannot declare this — `requires` accepts only
 `speckit_version` and `integrations` — so install them first:
 
 ```bash
 specify extension catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
   --name speckit-addons --install-allowed --priority 5
+specify extension add worktrees
 specify extension add ship
 specify extension add screenshots
 ```
 
-The worktree-first flow this workflow assumes additionally wants the `worktrees`
-and `git` extensions — see [docs/send-it-harness.md](../../docs/send-it-harness.md).
+The worktree-first flow this workflow assumes additionally wants the `git`
+extension — see [docs/send-it-harness.md](../../docs/send-it-harness.md).
+
+### Why `worktree` is a step and not just a hook
+
+The `worktrees` extension registers `speckit.worktrees.create` on `before_specify`,
+which is enough *only when a run actually starts at `specify`*. A resumed run, or a
+fix-up over a feature that was already specified, enters at a later step, never
+triggers the hook, and executes entirely in the primary checkout — and by the time
+anyone notices, `git worktree add` for that branch is impossible until the primary
+moves off it. Declaring it as an explicit first step closes that hole; the command
+is idempotent, so when the hook does fire it finds the session already isolated and
+no-ops.
 
 ## Inputs
 
@@ -45,13 +58,15 @@ and `git` extensions — see [docs/send-it-harness.md](../../docs/send-it-harnes
 
 ```mermaid
 flowchart TB
-    A["specify<br/>(command)"] --> B["plan<br/>(command)"]
+    W["worktree<br/>(command)"] --> A["specify<br/>(command)"]
+    A --> B["plan<br/>(command)"]
     B --> C["tasks<br/>(command)"]
     C --> D["screenshots-before<br/>(command)"]
     D --> E["implement<br/>(command)"]
     E --> F["screenshots-after<br/>(command)"]
     F --> G["ship<br/>(command)"]
 
+    style W fill:#684,color:#fff
     style A fill:#49a,color:#fff
     style B fill:#49a,color:#fff
     style C fill:#49a,color:#fff
@@ -63,6 +78,7 @@ flowchart TB
 
 | Step | Command | Provided by |
 |---|---|---|
+| `worktree` | `speckit.worktrees.create` | `worktrees` extension |
 | `specify` | `speckit.specify` | core |
 | `plan` | `speckit.plan` | core |
 | `tasks` | `speckit.tasks` | core |

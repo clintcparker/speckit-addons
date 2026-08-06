@@ -1,7 +1,7 @@
 # YOLO — Full SDD Cycle, no gates
 
-Runs the complete Spec Kit cycle — `specify` → `plan` → `tasks` → `implement` —
-straight through, with no human review gates in between.
+Runs the complete Spec Kit cycle — `worktree` → `specify` → `plan` → `tasks` →
+`implement` — straight through, with no human review gates in between.
 
 The built-in `speckit` workflow pauses twice: once to review the generated spec,
 once to review the plan. YOLO removes both. You describe what you want, walk
@@ -41,8 +41,23 @@ Or install this one workflow directly, without registering the catalog:
 
 ```bash
 specify workflow add yolo --from \
-  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.1/workflows/yolo/workflow.yml
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.2.0/workflows/yolo/workflow.yml
 ```
+
+As of 0.2.0 the first step needs the
+[`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+extension at **2.1.0 or later**, and fails at dispatch without it. Spec Kit's
+workflow schema cannot declare an extension dependency — `requires` accepts only
+`speckit_version` and `integrations` — so install it yourself:
+
+```bash
+specify extension catalog add \
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
+  --name speckit-addons --install-allowed --priority 5
+specify extension add worktrees
+```
+
+If you do not want worktree isolation, stay on `yolo-v0.1.1`.
 
 ## Inputs
 
@@ -56,26 +71,37 @@ Spec Kit will prompt for it.
 
 ## Steps
 
-Four `command` steps, no gates, no shell:
+Five `command` steps, no gates, no shell:
 
-| Step | Command |
-|---|---|
-| `specify` | `speckit.specify` |
-| `plan` | `speckit.plan` |
-| `tasks` | `speckit.tasks` |
-| `implement` | `speckit.implement` |
+| Step | Command | Provided by |
+|---|---|---|
+| `worktree` | `speckit.worktrees.create` | `worktrees` extension |
+| `specify` | `speckit.specify` | core |
+| `plan` | `speckit.plan` | core |
+| `tasks` | `speckit.tasks` | core |
+| `implement` | `speckit.implement` | core |
 
 ```mermaid
 flowchart TB
-    A["specify<br/>(command)"] --> B["plan<br/>(command)"]
+    W["worktree<br/>(command)"] --> A["specify<br/>(command)"]
+    A --> B["plan<br/>(command)"]
     B --> C["tasks<br/>(command)"]
     C --> D["implement<br/>(command)"]
 
+    style W fill:#684,color:#fff
     style A fill:#49a,color:#fff
     style B fill:#49a,color:#fff
     style C fill:#49a,color:#fff
     style D fill:#49a,color:#fff
 ```
+
+`worktree` is a **step**, not just the `worktrees` extension's `before_specify`
+hook, because the hook only fires when a run actually starts at `specify`. A
+resumed run, or a fix-up over an already-specified feature, enters later, never
+triggers the hook, and executes in the primary checkout — after which
+`git worktree add` for that branch is impossible until the primary moves off it.
+The command is idempotent, so when the hook does fire it finds the session
+already isolated and no-ops.
 
 For contrast, the built-in `speckit` workflow interposes a `gate` step after
 `specify` and again after `plan`, each of which pauses the run until you approve
@@ -88,10 +114,13 @@ engine-side ([spec-kit #2421](https://github.com/github/spec-kit/pull/2421)). On
 older versions `auto` is treated as a literal integration name and dispatch
 fails.
 
+The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+extension at **2.1.0 or later**, for the `worktree` step — see [Install](#install).
+
 The `requires.integrations` list names `claude` as an advisory compatibility
-hint, not a restriction. All four commands are core Spec Kit commands that every
-integration provides, so YOLO runs against whatever your project is initialized
-with.
+hint, not a restriction. The four SDD commands are core Spec Kit commands that
+every integration provides, so YOLO runs against whatever your project is
+initialized with.
 
 ## Adding your own steps
 

@@ -2,8 +2,8 @@
 
 The harness turns a one-line feature description into an open pull request with
 before/after UI screenshots, unattended. Six extensions and two workflows compose
-into one chain: a `before_specify` hook cuts the feature branch straight into a
-new git worktree and moves the agent session there, the spec/plan/tasks phases
+into one chain: an explicit `worktree` step cuts the feature branch straight into
+a new git worktree and moves the agent session there, the spec/plan/tasks phases
 run inside it, baseline screenshots are captured while the tree still renders
 what the pull request's base commit would, the implementation lands, the same
 views are captured again, and `ship` commits, pushes, and opens the PR with the
@@ -44,14 +44,15 @@ is not installability. That gap is the entire reason
 
 | Add-on | Version | Source | What it contributes |
 |---|---|---|---|
-| [`worktrees`](../extensions/worktrees/) | 2.0.0 | hosted here | The `before_specify` hook: creates the feature branch inside a new worktree and moves the session into it |
+| [`worktrees`](../extensions/worktrees/) | 2.1.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run |
 | [`git`](../extensions/git/) | 1.1.0 | hosted here | Feature-branch naming and numbering. The worktrees hook delegates to its `create-new-feature-branch.sh` to derive the branch name |
 | [`screenshots`](../extensions/screenshots/) | 0.1.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
 | `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) | `speckit.ship.run` — pre-flight, rebase, push, PR creation |
 | `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) | `speckit.staff-review.run` — review report into `FEATURE_DIR/reviews/` |
 | `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) | `speckit.qa.run` — QA report into `FEATURE_DIR/qa/` |
-| [`send-it`](../workflows/send-it/) | 0.2.0 | hosted here | The seven-step workflow: specify → plan → tasks → screenshots → implement → screenshots → ship |
-| [`send-it-checked`](../workflows/send-it-checked/) | 0.2.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`send-it`](../workflows/send-it/) | 0.3.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
+| [`send-it-checked`](../workflows/send-it-checked/) | 0.3.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`yolo`](../workflows/yolo/) | 0.2.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
 
 The three first-party extensions are published from this repo as release assets
 with a `sha256` in the catalog. The three third-party ones are pinned pointers at
@@ -67,9 +68,9 @@ control those tags.
 2. **Catalogs registered, extensions installed.** Each install writes the
    extension's hook declarations into `.specify/extensions.yml`, which is what
    the core command files read at run time.
-3. **`specify workflow run send-it -i spec="…"`** dispatches step 1,
-   `speckit.specify`.
-4. **The `before_specify` hook fires first.** `speckit.worktrees.create` derives
+3. **`specify workflow run send-it -i spec="…"`** dispatches step 1, the
+   `worktree` step.
+4. **The `worktree` step isolates the run.** `speckit.worktrees.create` derives
    the branch name via `--from-description`, which delegates to the git
    extension's `create-new-feature-branch.sh --dry-run --json` for numbering and
    slug rules; creates the branch with `git worktree add -b` from `base_ref`
@@ -77,8 +78,26 @@ control those tags.
    when unset); and, because `enter_worktree: true`, moves the agent session into
    the worktree. It runs *before* the spec is written because a branch can live
    in exactly one worktree: let `speckit.specify` create and check out the branch
-   in the primary checkout first and `git worktree add` can never claim it
-   afterward.
+   in the primary checkout first and `git worktree add` cannot claim it for as
+   long as the primary stays there.
+
+   **Why a step and not only the hook.** The `worktrees` extension also registers
+   this command on `before_specify`, and until `send-it` 0.3.0 that was the only
+   thing creating the worktree. A hook fires only when a run actually *starts* at
+   `speckit.specify` — a resumed run, or a fix-up over an already-specified
+   feature, enters at a later step, never triggers it, and executes entirely in
+   the primary checkout, silently. The workflows now declare the step *and*
+   inherit the hook; `speckit.worktrees.create` is idempotent as of `worktrees`
+   2.1.0, so whichever lands second sees the session is already isolated and
+   no-ops. It never mints a second feature number.
+
+   **When the branch is already checked out in the primary** — the fix-up case —
+   the step recovers only if the primary is provably clean (`git status
+   --porcelain` and `git stash list` both empty): it moves the primary to the base
+   ref, attaches the worktree, and reports `worktree_isolation=recovered`. Dirty
+   tree or any stash: `worktree_isolation=failed`, the run continues in the
+   primary, and `ship` puts that fact in the pull request description. Nothing of
+   the user's is stashed, moved, or forced.
 5. **The session model.** Every later step runs *in the worktree*, because they
    are all the same agent session and the working directory carries forward. The
    primary checkout stays on its own branch, untouched. Nothing downstream may
@@ -146,11 +165,18 @@ Five things about that sequence:
   `.specify/extensions/git/scripts/bash/create-new-feature-branch.sh`. The order
   of the two installs does not matter; both being installed before the first
   `workflow run` does.
+- **`worktrees` is no longer optional for any of these workflows.** All three
+  dispatch `speckit.worktrees.create` as their first step, which fails at
+  dispatch when the extension is absent. It must be at **2.1.0 or later** — the
+  step relies on the idempotent case detection added there, and against 2.0.0 the
+  step and the `before_specify` hook would each derive a branch name and mint two
+  feature numbers.
 
 The forks are what make this a pure `catalog add` + `extension add` sequence with
-**no hand edits to `.specify/extensions.yml`**: `worktrees` 2.0.0 declares its
+**no hand edits to `.specify/extensions.yml`**: `worktrees` 2.1.0 declares its
 hook at `before_specify` priority 20, and the `git` fork declares no competing
-`before_specify` hook, so the branch is created once, in the worktree. The
+`before_specify` hook, so the branch is created once, in the worktree — and the
+workflows' own `worktree` step no-ops when the hook got there first. The
 `screenshots` extension ships its app profile with `unconfigured: true` and
 derives it on first run, so there is nothing to fill in before the first pass
 either — review what it wrote afterward, and see

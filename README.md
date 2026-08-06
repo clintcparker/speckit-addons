@@ -18,9 +18,9 @@ does not register the others. Each section below has its own `catalog add`.
 
 | ID | Version | Description |
 |---|---|---|
-| [`yolo`](workflows/yolo/) | 0.1.1 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
-| [`send-it`](workflows/send-it/) | 0.2.0 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
-| [`send-it-checked`](workflows/send-it-checked/) | 0.2.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
+| [`yolo`](workflows/yolo/) | 0.2.0 | Full SDD cycle — `worktree` → `specify` → `plan` → `tasks` → `implement`, no review gates |
+| [`send-it`](workflows/send-it/) | 0.3.0 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
+| [`send-it-checked`](workflows/send-it-checked/) | 0.3.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
 
 ```bash
 specify workflow catalog add \
@@ -36,7 +36,7 @@ To install a single workflow without registering the catalog:
 
 ```bash
 specify workflow add yolo --from \
-  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.1.1/workflows/yolo/workflow.yml
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.2.0/workflows/yolo/workflow.yml
 ```
 
 Then set to work:
@@ -54,7 +54,7 @@ The rest are **pinned pointers** at somebody else's repository. See
 | ID | Version | Source |
 |---|---|---|
 | [`screenshots`](extensions/screenshots/) | 0.1.0 | Hosted here |
-| [`worktrees`](extensions/worktrees/) | 2.0.0 | Hosted here — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
+| [`worktrees`](extensions/worktrees/) | 2.1.0 | Hosted here — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
 | [`git`](extensions/git/) | 1.1.0 | Hosted here — fork of spec-kit's bundled `git` v1.0.0 |
 | `ship` | 1.0.0 | Pointer → [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) |
 | `staff-review` | 1.0.0 | Pointer → [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) |
@@ -97,7 +97,7 @@ under a directory of the same name.
 ## Versioning
 
 Each add-on is versioned and tagged independently, as `<id>-v<version>` — for
-example `yolo-v0.1.1`. Catalog entries pin their install URL to a tag, never to
+example `yolo-v0.2.0`. Catalog entries pin their install URL to a tag, never to
 a branch, so an install is reproducible and a change never reaches existing
 users until they run `specify workflow update`.
 
