@@ -20,3 +20,4 @@ venv/
 
 # Built extension zips
 dist/
+.no-wiki-capture
