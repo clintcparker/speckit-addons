@@ -1,19 +1,19 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-07-30T00:00:00Z",
+  "updated_at": "2026-08-05T00:00:00Z",
   "catalog_url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/main/workflows/catalog.json",
   "workflows": {
     "send-it": {
       "id": "send-it",
       "name": "Spec to PR, unattended",
-      "description": "specify → plan → tasks → implement → ship; no gates, ends in an open PR",
+      "description": "specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `screenshots` and `ship` extensions.",
       "author": "clintcparker",
-      "version": "0.1.0",
-      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/send-it-v0.1.0/workflows/send-it/workflow.yml",
+      "version": "0.2.0",
+      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/send-it-v0.2.0/workflows/send-it/workflow.yml",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/workflows/send-it",
-      "documentation": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.1.0/workflows/send-it/README.md",
-      "changelog": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.1.0/workflows/send-it/CHANGELOG.md",
+      "documentation": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.2.0/workflows/send-it/README.md",
+      "changelog": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.2.0/workflows/send-it/CHANGELOG.md",
       "license": "MIT",
       "requires": {
         "speckit_version": ">=0.8.12"
@@ -24,10 +24,11 @@
         "no-gates",
         "automation",
         "release",
-        "pull-request"
+        "pull-request",
+        "screenshots"
       ],
       "created_at": "2026-07-30T00:00:00Z",
-      "updated_at": "2026-07-30T00:00:00Z"
+      "updated_at": "2026-08-05T00:00:00Z"
     },
     "send-it-checked": {
       "id": "send-it-checked",

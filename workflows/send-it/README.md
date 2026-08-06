@@ -1,14 +1,36 @@
 # send-it — spec to PR, unattended
 
 Runs the complete Spec Kit cycle and then ships it: `specify` → `plan` →
-`tasks` → `implement` → `ship`. No review gates, no confirmations, no pauses.
-You describe what you want and come back to an open pull request.
+`tasks` → `screenshots (before)` → `implement` → `screenshots (after)` →
+`ship`. No review gates, no confirmations, no pauses. You describe what you
+want and come back to an open pull request with before/after UI screenshots.
 
 ```bash
 specify workflow run send-it -i spec="add dark mode" -i target_branch=main
 ```
 
 The pull request is the review gate. That is the whole design.
+
+## Requires
+
+| Extension | Why |
+|---|---|
+| [`ship`](https://github.com/arunt14/spec-kit-ship) | The `ship` step dispatches `speckit.ship.run` |
+| [`screenshots`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots) | The two capture steps dispatch `speckit.screenshots.capture` |
+
+Both are hard dependencies: a missing extension means the step fails at dispatch.
+Spec Kit's workflow schema cannot declare this — `requires` accepts only
+`speckit_version` and `integrations` — so install them first:
+
+```bash
+specify extension catalog add \
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
+  --name speckit-addons --install-allowed --priority 5
+specify extension add ship screenshots
+```
+
+The worktree-first flow this workflow assumes additionally wants the `worktrees`
+and `git` extensions — see [docs/send-it-harness.md](../../docs/send-it-harness.md).
 
 ## What it needs
 
@@ -35,14 +57,18 @@ git worktree, plus this workflow and its checked sibling.
 flowchart TB
     A["specify<br/>(command)"] --> B["plan<br/>(command)"]
     B --> C["tasks<br/>(command)"]
-    C --> D["implement<br/>(command)"]
-    D --> E["ship<br/>(command)"]
+    C --> D["screenshots-before<br/>(command)"]
+    D --> E["implement<br/>(command)"]
+    E --> F["screenshots-after<br/>(command)"]
+    F --> G["ship<br/>(command)"]
 
     style A fill:#49a,color:#fff
     style B fill:#49a,color:#fff
     style C fill:#49a,color:#fff
     style D fill:#49a,color:#fff
-    style E fill:#a63,color:#fff
+    style E fill:#49a,color:#fff
+    style F fill:#49a,color:#fff
+    style G fill:#a63,color:#fff
 ```
 
 | Step | Command | Provided by |
@@ -50,7 +76,9 @@ flowchart TB
 | `specify` | `speckit.specify` | core |
 | `plan` | `speckit.plan` | core |
 | `tasks` | `speckit.tasks` | core |
+| `screenshots-before` | `speckit.screenshots.capture` | `screenshots` extension |
 | `implement` | `speckit.implement` | core |
+| `screenshots-after` | `speckit.screenshots.capture` | `screenshots` extension |
 | `ship` | `speckit.ship.run` | `ship` extension |
 
 ## How the unattended part works
