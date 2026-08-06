@@ -75,7 +75,7 @@
       "author": "clintcparker",
       "version": "1.1.0",
       "download_url": "https://github.com/clintcparker/speckit-addons/releases/download/ext-git-v1.1.0/git-1.1.0.zip",
-      "sha256": "7f09dea9f47f86f765d797f64cdb7af6ca84d5290a4d90c9519863c2fcd5de29",
+      "sha256": "bfcf7fd208af523bcb2883f78aac457488f018080cb15ae23b5822a5068ff987",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/extensions/git",
       "documentation": "https://github.com/clintcparker/speckit-addons/blob/ext-git-v1.1.0/extensions/git/README.md",
