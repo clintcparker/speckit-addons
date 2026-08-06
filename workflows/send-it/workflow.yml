@@ -4,7 +4,7 @@ workflow:
   name: "Spec to PR, unattended"
   version: "0.2.0"
   author: "clintcparker"
-  description: "specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `screenshots` extension."
+  description: "specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `screenshots` and `ship` extensions."
 
 requires:
   # Same floor as yolo: 0.8.12 is the first release with engine-side resolution
