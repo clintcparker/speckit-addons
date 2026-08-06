@@ -5,7 +5,7 @@ All notable changes to the `send-it` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.2.0 (2026-08-05)
+## [0.2.0] — 2026-08-05
 
 ### Added
 - `screenshots-before` step between `tasks` and `implement`, and
@@ -47,4 +47,5 @@ First published release.
   auto-commit the working tree, never block on CI, and stop only on a rebase
   conflict that cannot be resolved trivially.
 
+[0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.2.0
 [0.1.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.1.0

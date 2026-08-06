@@ -26,28 +26,18 @@ Spec Kit's workflow schema cannot declare this — `requires` accepts only
 specify extension catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
   --name speckit-addons --install-allowed --priority 5
-specify extension add ship screenshots
+specify extension add ship
+specify extension add screenshots
 ```
 
 The worktree-first flow this workflow assumes additionally wants the `worktrees`
 and `git` extensions — see [docs/send-it-harness.md](../../docs/send-it-harness.md).
 
-## What it needs
-
-`send-it` calls `speckit.ship.run`, which is **not** a core Spec Kit command —
-it comes from the third-party [`ship`](https://github.com/arunt14/spec-kit-ship)
-extension. Installing this workflow on its own gives you a run that fails at the
-last step.
-
-Install the [`send-it` bundle](../../bundles/send-it/) instead. It pins and
-installs `ship` alongside the `worktrees` extension that gives each run its own
-git worktree, plus this workflow and its checked sibling.
-
 ## Inputs
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `spec` | yes | — | What you want built. Passed to the first four steps. |
+| `spec` | yes | — | What you want built. Passed to `specify`, `plan`, `tasks`, and `implement`. |
 | `integration` | no | `auto` | Which agent integration to dispatch to. `auto` uses whatever the project was initialized with. |
 | `target_branch` | no | `main` | The branch the pull request targets. |
 

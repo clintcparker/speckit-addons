@@ -1,7 +1,7 @@
 # speckit-addons
 
-Community add-ons for [Spec Kit](https://github.github.io/spec-kit/) — workflows,
-and over time presets, extensions, and bundles.
+Community add-ons for [Spec Kit](https://github.github.io/spec-kit/) — workflows
+and extensions now, presets over time.
 
 Everything here installs through Spec Kit's own catalog mechanism. Nothing needs
 to be copy-pasted into `.specify/` by hand.
@@ -19,8 +19,8 @@ does not register the others. Each section below has its own `catalog add`.
 | ID | Version | Description |
 |---|---|---|
 | [`yolo`](workflows/yolo/) | 0.1.1 | Full SDD cycle — `specify` → `plan` → `tasks` → `implement`, no review gates |
-| [`send-it`](workflows/send-it/) | 0.1.0 | Spec to PR, unattended — `yolo` plus `ship`, ending in an open pull request |
-| [`send-it-checked`](workflows/send-it-checked/) | 0.1.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
+| [`send-it`](workflows/send-it/) | 0.2.0 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
+| [`send-it-checked`](workflows/send-it-checked/) | 0.2.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
 
 ```bash
 specify workflow catalog add \
@@ -47,50 +47,47 @@ specify workflow run yolo -i spec="make the app do the thing"
 
 ### Extensions
 
-Pointers, not code — every entry pins somebody else's repository at a tag and a
-digest. See [extensions/README.md](extensions/README.md).
+Some of these are **hosted here** — first-party code, released from this repo.
+The rest are **pinned pointers** at somebody else's repository. See
+[extensions/README.md](extensions/README.md).
 
-| ID | Version | Upstream |
+| ID | Version | Source |
 |---|---|---|
-| `worktrees` | 1.3.2 | [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) |
-| `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) |
-| `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) |
-| `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) |
+| [`screenshots`](extensions/screenshots/) | 0.1.0 | Hosted here |
+| [`worktrees`](extensions/worktrees/) | 2.0.0 | Hosted here — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
+| [`git`](extensions/git/) | 1.1.0 | Hosted here — fork of spec-kit's bundled `git` v1.0.0 |
+| `ship` | 1.0.0 | Pointer → [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) |
+| `staff-review` | 1.0.0 | Pointer → [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) |
+| `qa` | 1.0.0 | Pointer → [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) |
 
 ```bash
 specify extension catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
   --name speckit-addons --install-allowed --priority 5
-specify extension add ship
+specify extension add screenshots
 ```
 
 `--install-allowed` is not the default; without it every install is refused.
 
-### Bundles
+`git` is the exception: `specify extension add git` resolves spec-kit's **bundled**
+copy before it ever reads a catalog, so the fork installs with `--from` instead.
+[extensions/README.md](extensions/README.md#the-git-fork-installs-with---from) has
+the command.
 
-| ID | Version | Description |
-|---|---|---|
-| [`send-it`](bundles/send-it/) | 0.1.0 | Spec to PR, unattended — four extensions plus both `send-it` workflows |
+### The send-it harness
 
-```bash
-specify bundle catalog add \
-  https://raw.githubusercontent.com/clintcparker/speckit-addons/main/bundles/catalog.json \
-  --id speckit-addons --policy install-allowed --priority 5
-specify bundle install send-it
-```
-
-A bundle resolves its components through *your* registered catalogs, so
-`send-it` needs the workflow and extension catalogs registered too. Its
-[README](bundles/send-it/README.md#install) has all three commands and the
-one-line post-install edit.
+These add-ons compose into an unattended pipeline from a one-line description to a
+pull request with before/after UI screenshots.
+**[docs/send-it-harness.md](docs/send-it-harness.md)** is the write-up: how the
+pieces fit, how to reproduce it in a new repo, and the gotchas.
 
 ### A gotcha worth knowing
 
 Registering a **workflow** or **extension** catalog for a project *replaces*
 Spec Kit's built-in `default` + `community` sources for that type — the project
-config is read instead of them, not alongside. The **bundle** stack is the
-exception: it merges. If you want the official catalogs back after registering
-this one, add them explicitly and check with `specify <type> catalog list`.
+config is read instead of them, not alongside. If you want the official catalogs
+back after registering this one, add them explicitly and check with
+`specify <type> catalog list`.
 
 ### More
 
@@ -129,11 +126,18 @@ on a branch.
 push, and open a pull request without asking. Point `target_branch` at a branch
 you are happy to see a PR against.
 
-The extension catalog published here points at four repositories this project
-does not control. They are unreviewed third-party code that runs with your full
-privileges. Each entry pins a tag *and* a SHA-256 of that tag's archive, so a
-re-pointed tag fails the install rather than swapping the code silently — but a
-pin is not a review. See [extensions/README.md](extensions/README.md#trust).
+Three of the extensions published here are this repo's own code; the other three
+are pointers at repositories this project does not control. Those three are
+unreviewed third-party code that runs with your full privileges. Each pointer
+entry pins a tag *and* a SHA-256 of that tag's archive, so a re-pointed tag fails
+the install rather than swapping the code silently — but a pin is not a review.
+See [extensions/README.md](extensions/README.md#trust-third-party-entries).
+
+`send-it` and `send-it-checked` also launch your application to take screenshots.
+The `screenshots` extension never modifies application code, and its data rules
+require app state to live outside the checkout and real user data to be restored
+after every run including a failed one — but it does start your app and drive its
+UI.
 
 ## Contributing
 

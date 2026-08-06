@@ -24,7 +24,10 @@ only `speckit_version` and `integrations` — so install them first:
 specify extension catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
   --name speckit-addons --install-allowed --priority 5
-specify extension add ship staff-review qa screenshots
+specify extension add ship
+specify extension add staff-review
+specify extension add qa
+specify extension add screenshots
 ```
 
 The worktree-first flow this workflow assumes additionally wants the `worktrees`
@@ -42,19 +45,11 @@ writes to `reviews/` and `speckit.qa.run` writes to `qa/`, so ship's pre-flight
 gates are real: it reads the most recent report of each and reacts to the
 verdict.
 
-## What it needs
-
-Three third-party extensions: [`ship`](https://github.com/arunt14/spec-kit-ship),
-[`staff-review`](https://github.com/arunt14/spec-kit-staff-review), and
-[`qa`](https://github.com/arunt14/spec-kit-qa). None of these commands are core
-Spec Kit. Install the [`send-it` bundle](../../bundles/send-it/), which pins all
-of them.
-
 ## Inputs
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `spec` | yes | — | What you want built. Passed to the first four steps. |
+| `spec` | yes | — | What you want built. Passed to `specify`, `plan`, `tasks`, and `implement`. |
 | `integration` | no | `auto` | Which agent integration to dispatch to. `auto` uses whatever the project was initialized with. |
 | `target_branch` | no | `main` | The branch the pull request targets. |
 
