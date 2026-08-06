@@ -67,6 +67,10 @@ layout: "sibling"           # sibling | nested
 auto_create: true            # false to prompt instead of auto-creating
 sibling_pattern: "{{repo}}--{{branch}}"
 dotworktrees_dir: ".worktrees"
+base_ref: ""                 # ref new branches are cut from; "" = auto-detect
+                              # (origin/main → main → origin/master → master → HEAD)
+enter_worktree: true          # move the session into the new worktree; false to
+                               # just print the path and stay put
 ```
 
 ## Commands
@@ -79,7 +83,9 @@ dotworktrees_dir: ".worktrees"
 
 ## Hook
 
-**`after_specify`** — automatically creates a worktree after a new feature is specified. Controlled by the `auto_create` config value.
+**`before_specify`** (priority 20) — creates the feature branch inside a new worktree and moves the session there *before* the spec is written. Controlled by the `auto_create` config value.
+
+This runs before rather than after `/speckit.specify` because a branch can live in exactly one worktree: if the spec were written first, `/speckit.specify` would create (and check out) the branch in the primary checkout, and `git worktree add` can never claim that branch afterward. Worktree-first avoids this failure mode by cutting the branch straight into its worktree, then writing the spec — and every later phase — there from the start.
 
 ## Script usage
 

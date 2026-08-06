@@ -42,7 +42,7 @@
       "author": "clintcparker",
       "version": "2.0.0",
       "download_url": "https://github.com/clintcparker/speckit-addons/releases/download/ext-worktrees-v2.0.0/worktrees-2.0.0.zip",
-      "sha256": "437606b4e1b4ebaa391bb2cceb665b192372cca72a270e9f7d05f184565543c5",
+      "sha256": "6de8317646dd377113249228c8a8a3e63843873e9a134193379e5c3aeadf8bd2",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees",
       "documentation": "https://github.com/clintcparker/speckit-addons/blob/ext-worktrees-v2.0.0/extensions/worktrees/README.md",
