@@ -14,7 +14,9 @@ the only hand edit anywhere is a single core spec-kit key.
 ## Four separate catalog stacks
 
 Spec Kit keeps an independent catalog system per add-on type — workflows,
-extensions, presets, bundles. Separate config files
+extensions, presets, bundles are the four this harness touches; the CLI also
+has an integration catalog and a workflow-step catalog that don't come up
+here. Separate config files
 (`.specify/workflow-catalogs.yml`, `.specify/extension-catalogs.yml`), separate
 env-var overrides, separate resolution. Registering one catalog URL does not
 register the others, which is why the harness needs two `catalog add` calls for
@@ -118,11 +120,16 @@ specify extension add git --force --from \
   https://github.com/clintcparker/speckit-addons/releases/download/ext-git-v1.1.0/git-1.1.0.zip
 
 specify workflow add send-it
+specify workflow add send-it-checked  # send-it-checked only
 specify workflow run send-it -i spec="make the app do the thing"
 ```
 
-Four things about that sequence:
+Five things about that sequence:
 
+- **`specify init` prompts for confirmation in a non-empty directory.**
+  Reproducing the harness in an existing repo is exactly that case. Answer y,
+  or pass `--force` (documented in `specify init --help`) to skip the prompt
+  non-interactively.
 - **`--integration` is the flag name as of specify 0.15.2**, which every CLI
   behavior described here was checked against; earlier releases spelled it
   `--ai`, and `.specify/init-options.json` still records both keys.
@@ -214,9 +221,11 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
   profile is `screenshots-config.yml` and not `app-profile.md`.
 - **`config.defaults` in an extension manifest is live, not documentation.**
   `ConfigManager._get_extension_defaults()` reads it as the base layer of
-  `get_config()`, beneath the deployed `<id>-config.yml`. Because
-  `provides.config[].required` may be `false`, that deployed file can
-  legitimately be absent — and then the manifest's default is what takes effect.
+  `get_config()`, beneath the deployed `<id>-config.yml`. That deployed file can
+  legitimately be absent: `scaffold_config` only runs from `extension add` and
+  `extension enable`, so an extension installed via `specify init --extension
+  <url>` never gets one scaffolded, and a user can always delete or never commit
+  the file. Whenever it's missing, the manifest's default is what takes effect.
   The `git` fork therefore sets `branch_numbering: timestamp` in *both*
   `config-template.yml` and `extension.yml`'s `config.defaults`. A fork that
   changes only the template leaves a stale default that silently reactivates the
@@ -249,8 +258,10 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
 - **Sequential feature numbering collides under parallel worktrees.** Each
   worktree computes "the next number" independently from the same `specs/`
   directory and the same refs. Use timestamps, in both
-  `.specify/init-options.json` (`feature_numbering`) and the git extension's
-  `git-config.yml` (`branch_numbering`).
+  `.specify/init-options.json` (`feature_numbering`) and, for upstream's
+  bundled `git` extension rather than this harness's fork, `git-config.yml`
+  (`branch_numbering`) — the fork here already defaults `branch_numbering` to
+  `timestamp`.
 
 ## Publishing changes
 
@@ -263,4 +274,6 @@ archive comes from [`scripts/build_extension.py`](../scripts/build_extension.py)
 which pins timestamps, entry order, and permissions so the same tree produces the
 same bytes anywhere; the catalog's `sha256` is the digest of that uploaded asset,
 and [`scripts/validate_catalog.py`](../scripts/validate_catalog.py) checks every
-catalog entry against the manifest on disk.
+catalog entry, cross-checking against the manifest on disk for add-ons hosted in
+this repo — pointer entries like the three arunt14 extensions have no local
+manifest to check against.
