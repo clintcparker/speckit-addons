@@ -31,7 +31,10 @@ jobs:
       - name: Verify pinned URLs resolve
         # Skipped on pull requests by design: a release PR bumps the version
         # before its tag exists, so this check would fail every release PR by
-        # construction. On main and on the weekly schedule it catches a deleted
-        # tag or a release that was committed but never tagged.
-        if: github.event_name != 'pull_request'
+        # construction. Skipped on tag pushes for the mirror-image reason --
+        # release.yml is what attaches the asset, and it has not run yet at this
+        # point; it re-runs this same check once the release is up. On main and
+        # on the weekly schedule it catches a deleted tag or a release that was
+        # committed but never tagged.
+        if: github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/')
         run: python scripts/validate_catalog.py --check-urls

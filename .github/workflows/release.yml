@@ -1,0 +1,155 @@
+name: release
+
+# Publishes the release a version-pinned catalog entry already promises.
+#
+# Both catalogs pin URLs that only resolve once a tag exists -- and for
+# first-party extensions, only once a zip is attached to that tag's release.
+# Bumping a catalog on main and forgetting to tag therefore ships a catalog
+# whose entries 404 for every consumer, with nothing on main to show for it.
+# That is exactly what happened to ext-screenshots-v0.1.0, ext-worktrees-v2.0.0,
+# ext-git-v1.1.0, send-it-v0.2.0 and send-it-checked-v0.2.0. Pushing the tag is
+# now the only manual step; this builds and publishes the rest.
+
+on:
+  push:
+    tags: ["*-v*"]
+
+# gh release create/upload write to the repo's releases.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install pyyaml
+
+      - name: Parse the tag
+        id: parse
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          # Extension tags are ext-<id>-v<version> and carry a zip asset whose
+          # digest specify-cli verifies. Every other <id>-v<version> tag is a
+          # workflow, served by raw URL from the tag tree itself -- the release
+          # is a changelog anchor, so there is nothing to attach.
+          if [[ "$tag" == ext-* ]]; then
+            kind=extension
+            rest="${tag#ext-}"
+          else
+            kind=workflow
+            rest="$tag"
+          fi
+          # Ids contain hyphens (send-it-checked, staff-review), so split on the
+          # last -v, not the first.
+          id="${rest%-v*}"
+          version="${rest##*-v}"
+          # A tag with no -v at all leaves both expansions equal to $rest, so
+          # emptiness alone does not catch it -- compare against $rest as well.
+          if [[ -z "$id" || -z "$version" || "$id" == "$rest" ]]; then
+            echo "::error::Tag '$tag' is not <id>-v<version> or ext-<id>-v<version>"
+            exit 1
+          fi
+          {
+            echo "kind=$kind"
+            echo "id=$id"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+          echo "$tag -> kind=$kind id=$id version=$version"
+
+      - name: Build the asset
+        if: steps.parse.outputs.kind == 'extension'
+        run: python scripts/build_extension.py "extensions/${{ steps.parse.outputs.id }}" --output dist
+
+      - name: Verify the asset against the catalog
+        # The catalog's sha256 is the contract: specify-cli refuses to extract an
+        # archive whose digest does not match. Uploading an asset that disagrees
+        # with main would break installs just as thoroughly as uploading nothing,
+        # and far more confusingly. Fail before publishing, not after.
+        if: steps.parse.outputs.kind == 'extension'
+        env:
+          EXT_ID: ${{ steps.parse.outputs.id }}
+          EXT_VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os, sys
+
+          ext_id = os.environ["EXT_ID"]
+          version = os.environ["EXT_VERSION"]
+          catalog = json.load(open("extensions/catalog.json"))["extensions"]
+
+          entry = catalog.get(ext_id)
+          if entry is None:
+              sys.exit(f"extensions/catalog.json has no entry for {ext_id!r}")
+          if entry["version"] != version:
+              sys.exit(
+                  f"tag says {ext_id} {version}, catalog says {entry['version']} -- "
+                  "bump the catalog on main before tagging"
+              )
+
+          archive = f"dist/{ext_id}-{version}.zip"
+          digest = hashlib.sha256(open(archive, "rb").read()).hexdigest()
+          if digest != entry["sha256"]:
+              sys.exit(
+                  f"digest mismatch for {archive}\n"
+                  f"  built:   {digest}\n"
+                  f"  catalog: {entry['sha256']}"
+              )
+          print(f"ok: {archive} {digest}")
+          PY
+
+      - name: Verify the workflow version against the catalog
+        if: steps.parse.outputs.kind == 'workflow'
+        env:
+          WF_ID: ${{ steps.parse.outputs.id }}
+          WF_VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json, os, sys
+
+          wf_id = os.environ["WF_ID"]
+          version = os.environ["WF_VERSION"]
+          catalog = json.load(open("workflows/catalog.json"))["workflows"]
+
+          entry = catalog.get(wf_id)
+          if entry is None:
+              sys.exit(f"workflows/catalog.json has no entry for {wf_id!r}")
+          if entry["version"] != version:
+              sys.exit(
+                  f"tag says {wf_id} {version}, catalog says {entry['version']} -- "
+                  "bump the catalog on main before tagging"
+              )
+          print(f"ok: {wf_id} {version}")
+          PY
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          KIND: ${{ steps.parse.outputs.kind }}
+          EXT_ID: ${{ steps.parse.outputs.id }}
+          EXT_VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Idempotent: re-running on an existing tag refreshes the asset rather
+          # than failing, so a botched upload can be fixed by re-dispatching.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "$EXT_ID $EXT_VERSION" \
+              --notes "Released from \`$TAG\`. See the changelog for this version."
+          fi
+          if [[ "$KIND" == "extension" ]]; then
+            gh release upload "$TAG" "dist/$EXT_ID-$EXT_VERSION.zip" --clobber
+          fi
+
+      - name: Confirm the catalog's pinned URLs now resolve
+        # The whole point of the job. --check-urls is skipped on tag pushes in
+        # validate.yml precisely because the release does not exist yet there;
+        # here it does, so this is the run that proves the entry is installable.
+        run: python scripts/validate_catalog.py --check-urls
