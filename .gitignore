@@ -14,3 +14,9 @@ venv/
 # Editors
 .idea/
 *.swp
+
+# Superpowers scratch (progress ledger, task briefs, review packages)
+.superpowers/
+
+# Built extension zips
+dist/
