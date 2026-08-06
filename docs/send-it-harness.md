@@ -8,8 +8,10 @@ run inside it, baseline screenshots are captured while the tree still renders
 what the pull request's base commit would, the implementation lands, the same
 views are captured again, and `ship` commits, pushes, and opens the PR with the
 before/after tables embedded. Everything below installs through Spec Kit's own
-catalog mechanism — nothing an add-on owns is hand-patched into `.specify/`, and
-the only hand edit anywhere is a single core spec-kit key.
+catalog mechanism — nothing an add-on owns is hand-patched into `.specify/`. The
+only hand edits anywhere are to core spec-kit: one key, plus the patch that
+makes core actually read it (see
+[core-feature-numbering.md](core-feature-numbering.md)).
 
 ## Four separate catalog stacks
 
@@ -101,6 +103,8 @@ specify init . --integration claude
 
 # feature_numbering is core spec-kit's, not extension-owned. init writes
 # "sequential"; change it to "timestamp" in .specify/init-options.json.
+# Then patch core so it actually reads the key — stock spec-kit ignores it and
+# keeps numbering specs/ sequentially. See docs/core-feature-numbering.md.
 
 specify extension catalog add \
   https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json \
@@ -154,12 +158,21 @@ either — review what it wrote afterward, and see
 
 ## Remaining manual steps
 
-There are exactly two.
+There are exactly three.
 
 **`feature_numbering: "timestamp"` in `.specify/init-options.json`.** Core
 spec-kit owns this key and no extension can set it. Left at the default
 `sequential`, parallel worktrees collide: each computes "the next number"
 independently from the same `specs/` directory and the same refs.
+
+**The core patch that makes that key do anything.** Setting it is necessary but
+not sufficient: through spec-kit 0.15.2 `create-new-feature.sh` only honors an
+explicit `--timestamp` flag and never reads `init-options.json`, and the
+`speckit.specify` prose asks the agent to hand-derive the prefix by scanning
+`specs/`. Both keep producing `001-`, `002-` while this repo's `git` fork
+correctly timestamps the branch — so the branch and worktree look right and only
+the spec directory drifts. [core-feature-numbering.md](core-feature-numbering.md)
+carries both halves of the patch and a six-case test.
 
 **Skill regeneration after editing any command file under
 `.specify/extensions/*/commands/`.** Installing an extension generates
@@ -261,7 +274,8 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
   `.specify/init-options.json` (`feature_numbering`) and, for upstream's
   bundled `git` extension rather than this harness's fork, `git-config.yml`
   (`branch_numbering`) — the fork here already defaults `branch_numbering` to
-  `timestamp`.
+  `timestamp`. Note that `feature_numbering` alone changes nothing until core is
+  patched to read it; see [core-feature-numbering.md](core-feature-numbering.md).
 
 ## Publishing changes
 
