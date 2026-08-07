@@ -46,7 +46,7 @@ specify workflow add yolo --from \
 
 As of 0.2.0 the first step needs the
 [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
-extension at **2.1.0 or later**, and fails at dispatch without it. Spec Kit's
+extension at **2.2.0 or later**, and fails at dispatch without it. Spec Kit's
 workflow schema cannot declare an extension dependency — `requires` accepts only
 `speckit_version` and `integrations` — so install it yourself:
 
@@ -115,7 +115,7 @@ older versions `auto` is treated as a literal integration name and dispatch
 fails.
 
 The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
-extension at **2.1.0 or later**, for the `worktree` step — see [Install](#install).
+extension at **2.2.0 or later**, for the `worktree` step — see [Install](#install).
 
 The `requires.integrations` list names `claude` as an advisory compatibility
 hint, not a restriction. The four SDD commands are core Spec Kit commands that

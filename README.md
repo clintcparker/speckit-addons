@@ -54,7 +54,7 @@ The rest are **pinned pointers** at somebody else's repository. See
 | ID | Version | Source |
 |---|---|---|
 | [`screenshots`](extensions/screenshots/) | 0.1.0 | Hosted here |
-| [`worktrees`](extensions/worktrees/) | 2.1.0 | Hosted here — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
+| [`worktrees`](extensions/worktrees/) | 2.2.0 | Hosted here — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
 | [`git`](extensions/git/) | 1.1.0 | Hosted here — fork of spec-kit's bundled `git` v1.0.0 |
 | `ship` | 1.0.0 | Pointer → [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) |
 | `staff-review` | 1.0.0 | Pointer → [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) |

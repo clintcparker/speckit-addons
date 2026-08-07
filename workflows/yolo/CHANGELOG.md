@@ -5,6 +5,30 @@ All notable changes to the `yolo` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-08-06
+
+### Fixed
+- **The session model documented above the `worktree` step was false for unattended runs.**
+  It claimed every later step runs in the worktree because the working directory carries
+  forward. Moving the session needs the `EnterWorktree` tool, which requires interactive
+  approval that an unattended run has nobody to give — so the working directory does *not*
+  carry forward, and the real mechanism is the `SPECIFY_INIT_DIR` /
+  `SPECIFY_FEATURE_DIRECTORY` overrides the worktree step emits. The comment now says so.
+- The `worktree` step's brief tells it to expect `session=primary`, treat it as the normal
+  outcome rather than an error, and emit the overrides as structured fields. This workflow
+  has no ship step, so the run summary must carry both `worktree_isolation` and `session` —
+  it is the only record the user gets.
+
+### Changed
+- **REPORT, DO NOT REMEDY** is explicit in the `worktree` step's brief. "Never prompt" was
+  being read as licence to act unilaterally — closing a base-ref gap with `git merge`,
+  copying gitignored feature inputs into the worktree. Neither is this step's mandate.
+
+### Requires
+- The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+  extension, now at **2.2.0 or later** — the step relies on the `session` field and the
+  `EnterWorktree`-refused path added there.
+
 ## [0.2.0] — 2026-08-06
 
 ### Fixed
@@ -64,6 +88,7 @@ with corrections.
   inherited from the built-in `speckit` workflow and referenced by no step, so
   it prompted for a value that changed nothing.
 
+[0.2.1]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.2.1
 [0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.2.0
 [0.1.1]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.1.1
 [0.1.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.1.0

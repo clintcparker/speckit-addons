@@ -97,6 +97,53 @@ It fires only when a run actually *starts* at `/speckit.specify`. A resumed run,
 
 `git worktree add` cannot succeed until the primary moves off it. Step 0 recovers *only* when the primary is provably clean — `git status --porcelain` and `git stash list` both empty — by checking the primary out to the base ref, attaching the worktree, and reporting `worktree_isolation=recovered` along with the base ref the primary now sits on. A dirty tree or any stash entry falls back to `worktree_isolation=failed`: the run continues in place and reports loudly, and nothing of yours is moved, stashed, or forced.
 
+## Reported outcomes
+
+The command reports **two** machine-readable fields, and as of 2.2.0 they are orthogonal — one
+describes the worktree, the other describes where the agent session is standing.
+
+| Field | Values | Meaning |
+|---|---|---|
+| `worktree_isolation` | `created`, `already`, `entered`, `recovered`, `failed` | What happened to the branch and its worktree (`## Outline` step 0) |
+| `session` | `worktree`, `primary` | Whether the session's working directory actually moved (`## Outline` step 3) |
+
+Moving the session needs the `EnterWorktree` tool, which requires interactive approval. In an
+**unattended workflow run there is nobody to approve it**, so the normal result is
+`worktree_isolation=created` with `session=primary`: the worktree is correct and nothing is standing
+in it. That combination is why a single enum was not enough — 2.1.0 reported it as a bare `created`,
+which a ship step reads as unqualified success.
+
+Whenever `session=primary`, the command emits the overrides that keep the rest of the run out of the
+primary checkout:
+
+```text
+session=primary
+SPECIFY_INIT_DIR=/path/to/worktree
+SPECIFY_FEATURE_DIRECTORY=/path/to/worktree/specs/<feature-dir>
+```
+
+Both are first-priority overrides honored by `.specify/scripts/bash/common.sh`. `SPECIFY_INIT_DIR`
+has to be exported for every `.specify/scripts/**` invocation for the remainder of the run. This is a
+**degraded run**: it stays correct only as long as each later step honors the overrides, and nothing
+enforces that, so a workflow that ships should put it in the pull request description.
+
+### It reports hazards; it does not fix them
+
+The command creates a branch in a worktree and moves the session into it. Conditions it merely
+*observes* get named and left alone:
+
+- **A base ref behind its local counterpart.** `base_ref` auto-detect prefers `origin/main` over
+  `main` on purpose — forking from the pushed remote is what keeps the eventual pull request down to
+  just the feature. When local `main` is ahead, the command says so and stops there. It will not
+  merge or rebase to close the gap, because that drags unpushed commits onto the feature branch where
+  they surface in the PR as if they were part of the feature. Set `base_ref: "main"` if forking from
+  the local branch is what you want.
+- **Untracked and ignored inputs.** A fresh worktree is a checkout of `base_ref`, so a gitignored
+  `docs/` tree, local fixtures, or a `.env` are in the primary and not in the worktree, by
+  construction. If the feature description names such a path, the command lists it as missing rather
+  than copying it across — a feature whose input is not in version control cannot be reproduced from
+  the branch.
+
 ## Script usage
 
 The bash script can be called directly for automation:

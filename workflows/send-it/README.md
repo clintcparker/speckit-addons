@@ -15,7 +15,7 @@ The pull request is the review gate. That is the whole design.
 
 | Extension | Why |
 |---|---|
-| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.1.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the idempotent case detection added in 2.1.0 |
+| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.2.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the `session` field and `EnterWorktree`-refused path added in 2.2.0 (plus the idempotent case detection from 2.1.0) |
 | [`ship`](https://github.com/arunt14/spec-kit-ship) | The `ship` step dispatches `speckit.ship.run` |
 | [`screenshots`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots) | The two capture steps dispatch `speckit.screenshots.capture` |
 

@@ -11,7 +11,7 @@ specify workflow run send-it-checked -i spec="add dark mode" -i target_branch=ma
 
 | Extension | Why |
 |---|---|
-| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.1.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the idempotent case detection added in 2.1.0 |
+| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.2.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the `session` field and `EnterWorktree`-refused path added in 2.2.0 (plus the idempotent case detection from 2.1.0) |
 | [`ship`](https://github.com/arunt14/spec-kit-ship) | The `ship` step dispatches `speckit.ship.run` |
 | [`staff-review`](https://github.com/arunt14/spec-kit-staff-review) | The `review` step dispatches `speckit.staff-review.run` |
 | [`qa`](https://github.com/arunt14/spec-kit-qa) | The `qa` step dispatches `speckit.qa.run` |

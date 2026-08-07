@@ -122,21 +122,72 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    - Run `git worktree add -b <branch> <path> <base-ref>` (new branch) or `git worktree add <path> <branch>` (existing branch checked out nowhere)
    - For nested layout, ensure `.worktrees/` is in `.gitignore`
 
-3. **Move into the worktree** (unless `enter_worktree` is `false`, or the user passed `--in-place`/`--no-worktree`):
+3. **Move into the worktree — or declare that you could not.** Skip only when `enter_worktree` is
+   `false`, or the user passed `--in-place`/`--no-worktree`.
 
-   Call the `EnterWorktree` tool with `path` set to the `path` from the script's JSON. The session's working directory becomes the worktree, which is what makes the rest of the feature land there: `specs/<dir>/spec.md`, `.specify/feature.json`, and every later phase (`/speckit-plan`, `/speckit-tasks`, `/speckit-implement`, `/speckit-ship-run`) resolve relative to the worktree with no absolute-path juggling. Continue the current command — including the `/speckit-specify` body that invoked this hook — from there.
+   Call the `EnterWorktree` tool with `path` set to the `path` from the script's JSON. The session's working directory becomes the worktree, which is what makes the rest of the feature land there: `specs/<dir>/spec.md`, `.specify/feature.json`, and every later phase (`/speckit-plan`, `/speckit-tasks`, `/speckit-implement`, `/speckit-ship-run`) resolve relative to the worktree with no absolute-path juggling. Continue the current command — including the `/speckit-specify` body that invoked this hook — from there, and report `session=worktree`.
 
-   If no such tool exists (non-Claude integration), do not silently write the spec into the primary checkout. Instead:
-   - export `SPECIFY_INIT_DIR=<worktree path>` for every `.specify/scripts/**` invocation, and
-   - set `SPECIFY_FEATURE_DIRECTORY=<worktree path>/specs/<feature-dir>` before creating the spec.
+   **When the session cannot be moved.** Three distinct things produce that outcome:
 
-   Both are first-priority overrides honored by `.specify/scripts/bash/common.sh`.
+   - **No such tool** — a non-Claude integration, where `EnterWorktree` does not exist.
+   - **The call was refused** — the tool exists but needs interactive approval that nobody is present
+     to give. This is the *normal* outcome of an unattended workflow run, not an error, and it is the
+     case this command previously did not cover.
+   - **The call failed** — the tool exists, was invoked, and returned an error.
 
-4. **Verify spec artifacts** — only when the worktree already existed, or on a manual call. Under `before_specify` the worktree is new and intentionally has no spec yet; skip this step. Otherwise check `specs/<feature-dir>/` in the worktree and list which artifacts are present (spec.md, plan.md, tasks.md).
+   All three land in the same state: the worktree is real and correct, and only the session's working
+   directory is wrong. **Do not silently write the spec into the primary checkout, and do not report
+   this as an unqualified success.** Report `session=primary` and emit the override block in step 6's
+   fields, verbatim:
 
-5. **Report**: Output a summary:
+   ```text
+   SPECIFY_INIT_DIR=<worktree path>
+   SPECIFY_FEATURE_DIRECTORY=<worktree path>/specs/<feature-dir>
+   ```
 
-   ```markdown
+   Both are first-priority overrides honored by `.specify/scripts/bash/common.sh`. `SPECIFY_INIT_DIR`
+   must be exported for **every** `.specify/scripts/**` invocation from here to the end of the run;
+   `SPECIFY_FEATURE_DIRECTORY` must be set before the spec is created. Under `before_specify` the
+   feature directory does not exist yet — name the path it *will* have, deriving `<feature-dir>` from
+   the branch name. These belong in the structured fields block precisely because prose gets skimmed
+   and this is the only thing keeping the rest of the run out of the wrong tree.
+
+   `session=primary` is a **degraded run**. It stays correct only as long as every later step honors
+   the overrides, and nothing enforces that. A workflow that ships must surface it in the pull request
+   description.
+
+   When `enter_worktree` is `false` the session also stays put — report `session=primary (by
+   configuration)`, which is a choice rather than a degradation. `--in-place`/`--no-worktree` creates
+   no worktree at all; there is nothing to enter and no override to emit.
+
+4. **Report what the new worktree does not carry.** A worktree is a fresh checkout of `base_ref`, so
+   two classes of thing the primary has can be silently absent. Both are *reported*, never repaired —
+   see `## Rules`.
+
+   - **The base ref may lag a local branch of the same name.** `resolve_base_ref()` prefers
+     `origin/main` over `main` deliberately: under the worktree-first flow the base ref — not the
+     primary's HEAD — decides what the feature forks from, and forking from the *pushed* remote is
+     what keeps the eventual pull request down to just the feature. When the resolved base ref is a
+     remote branch whose local counterpart is ahead, say so with the count:
+     `base_ref=origin/main; local main is 1 commit ahead`. Do **not** merge, rebase, cherry-pick or
+     reset to close that gap — doing so drags unpushed commits into the feature branch, and they will
+     show up in the pull request as if they were part of the feature. If forking from local `main` is
+     what the user wants, that is a one-line `base_ref: "main"` in `worktree-config.yml`, and it is
+     their call to make, not this command's.
+   - **Untracked and ignored files do not exist here.** Anything gitignored or never committed — a
+     `docs/` tree kept out of version control, local fixtures, a `.env` — is in the primary and not in
+     the worktree, by construction. When the feature description names a path that exists in the
+     primary but not in the worktree, list it:
+     `missing in worktree: docs/ROADMAP.md (ignored by .gitignore:25)`. Do **not** copy it across. A
+     feature whose input is not in version control cannot be reproduced from the branch, and a loud
+     early report beats a run built on files the pull request will never contain.
+
+5. **Verify spec artifacts** — only when the worktree already existed, or on a manual call. Under `before_specify` the worktree is new and intentionally has no spec yet; skip this step. Otherwise check `specs/<feature-dir>/` in the worktree and list which artifacts are present (spec.md, plan.md, tasks.md).
+
+6. **Report**: Output a summary — the table, whichever step 4 notes actually fired, and the fields
+   block. Nothing else; every later step of an unattended run reads this output as its context.
+
+   ````markdown
    ## Worktree Created
 
    | Field | Value |
@@ -145,24 +196,52 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    | **Base ref** | origin/main |
    | **Layout** | sibling |
    | **Worktree path** | /Users/me/code/MyProject--005-user-auth |
-   | **Session** | moved into the worktree |
    | **Isolation** | created |
+   | **Session** | worktree |
+
+   ```text
+   worktree_isolation=created
+   session=worktree
+   ```
 
    **Next steps:**
    - Continue the current phase — you are already in the worktree
    - Run `/speckit-worktrees-list` to see all active worktrees
-   ```
+   ````
 
-   **Isolation** carries step 0's outcome verbatim, and later steps of an unattended workflow read
-   it: `created` (case 3), `already` (case 1 no-op), `entered` (case 2, worktree existed),
-   `recovered` (the primary was moved off the branch — name the base ref it now sits on), or
-   `failed` (running in the primary; name the branch and the reason). Anything other than the first
-   three is a fact the run must carry to its end — a ship step should put it in the pull request
-   description rather than let it die in a transcript.
+   Two machine-readable fields, and they are **orthogonal** — one describes the worktree, the other
+   describes where the session is standing:
+
+   **`worktree_isolation`** carries step 0's outcome verbatim: `created` (case 3), `already` (case 1
+   no-op), `entered` (case 2, worktree existed), `recovered` (the primary was moved off the branch —
+   name the base ref it now sits on), or `failed` (running in the primary; name the branch and the
+   reason).
+
+   **`session`** carries step 3's outcome: `worktree` or `primary`. When it is `primary` for any
+   reason other than `enter_worktree: false`, the `SPECIFY_INIT_DIR` and `SPECIFY_FEATURE_DIRECTORY`
+   lines go in the fields block too, and the reason is named on the Session row (`primary —
+   EnterWorktree declined, unattended run`).
+
+   `worktree_isolation=created` together with `session=primary` is an ordinary unattended run, and it
+   is exactly the combination a single enum could not express: the worktree is right and nothing is
+   standing in it. Do not report it as clean.
+
+   **What must reach the end of the run.** Any of: `worktree_isolation` outside
+   {`created`, `already`, `entered`}; `session=primary`; or either step 4 note firing. A ship step
+   puts these in the pull request description rather than letting them die in a transcript.
 
 ## Rules
 
 - **Idempotent** — safe to invoke twice in one run (the `before_specify` hook *and* an explicit workflow step). Step 0 decides the case before anything else happens; whichever call lands second finds the session already isolated and no-ops
+- **Report hazards; never remedy them.** This command creates a branch in a worktree and moves the
+  session into it. That is its entire mandate. Conditions it merely *observes* — a base ref behind
+  its local counterpart, an input file that is gitignored, a stale remote, a missing dependency — get
+  named in the report and left alone. Specifically: no `merge`, `rebase`, `cherry-pick`, `reset` or
+  `pull` to move the branch off the base ref the script resolved, and no copying untracked or ignored
+  files into the worktree. An unattended run says "never prompt", which is not a licence to act
+  unilaterally — it means decide the cases this command defines and *report* everything else. A
+  repair nobody asked for is worse than the condition it fixed, because the condition was visible and
+  the repair is not
 - **Default behavior is to create a worktree** — only skip if the user explicitly passes `--in-place` or `--no-worktree`, or `auto_create` is `false` in config and this is a hook call
 - **One worktree per branch** — never create a duplicate; report the existing path and exit successfully
 - **Never modify the primary checkout, with one narrow exception** — no `checkout`, no `switch`, no stash in normal operation. The primary stays where the user left it, which is the whole point of creating the branch inside the worktree. The single exception is step 0's recovery path, where the feature branch is *already* checked out in the primary and the primary is provably clean (empty `git status --porcelain`, empty `git stash list`). There, and only there, `git checkout <base>` is permitted so the branch can be released to a worktree — and the move must be reported loudly

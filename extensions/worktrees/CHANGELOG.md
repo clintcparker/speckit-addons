@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.2.0 (2026-08-06)
+
+### Added
+- **`session` is a second machine-readable field, orthogonal to `worktree_isolation`.** One describes
+  the worktree, the other describes where the agent session is standing: `session=worktree` or
+  `session=primary`. `worktree_isolation=created` with `session=primary` is an ordinary unattended
+  run — the worktree is right and nothing is standing in it — and no single enum could express it.
+  2.1.0 reported that state as a bare `created`, which a ship step reads as unqualified success.
+- **`## Outline` step 3 covers the case where `EnterWorktree` is refused.** 2.1.0 had a fallback, but
+  scoped it to "if no such tool exists (non-Claude integration)". The common case is different and was
+  uncovered: the tool *exists* and the call needs interactive approval nobody is present to give,
+  which is the normal outcome of every unattended workflow run. All three ways the move can fail — no
+  tool, refused, errored — now land in one defined state.
+- **The `SPECIFY_INIT_DIR` / `SPECIFY_FEATURE_DIRECTORY` overrides are structured output, not
+  advice.** They go in step 6's fields block whenever `session=primary`, because they are the only
+  thing keeping the remaining steps out of the primary checkout and prose gets skimmed.
+- **`## Outline` step 4 reports what the worktree does not carry** — the two things a fresh checkout
+  of `base_ref` silently lacks. A base ref behind its local counterpart (`base_ref=origin/main; local
+  main is 1 commit ahead`), and untracked or ignored inputs the description names that cannot exist in
+  the worktree (`missing in worktree: docs/ROADMAP.md (ignored by .gitignore:25)`).
+
+### Changed
+- **New rule: report hazards, never remedy them.** No `merge`/`rebase`/`cherry-pick`/`reset`/`pull`
+  to move the branch off the resolved base ref, and no copying untracked or ignored files into the
+  worktree. Closing a base-ref gap by hand drags unpushed commits into the feature branch, where they
+  surface in the pull request as if they were part of the feature; `base_ref` in `worktree-config.yml`
+  is the supported way to change what a feature forks from, and it is the user's decision. "Never
+  prompt" in an unattended run means decide the cases this command defines and report everything
+  else — it is not a licence to act unilaterally.
+- The report contract is explicit about staying short. Every later step of an unattended run reads
+  this output as its context.
+
 ## 2.1.0 (2026-08-06)
 
 ### Added

@@ -5,6 +5,33 @@ All notable changes to the `send-it` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-08-06
+
+### Fixed
+- **The session model documented above the `worktree` step was false for unattended runs.**
+  It claimed every later step runs in the worktree because the working directory carries
+  forward. Moving the session needs the `EnterWorktree` tool, which requires interactive
+  approval that an unattended run has nobody to give — so the working directory does *not*
+  carry forward, and the real mechanism is the `SPECIFY_INIT_DIR` /
+  `SPECIFY_FEATURE_DIRECTORY` overrides the worktree step emits. The comment now says so.
+- The `worktree` step's brief tells it to expect `session=primary`, treat it as the normal
+  outcome rather than an error, and emit the overrides as structured fields.
+- The `ship` step carries `session` as well as `worktree_isolation` into the pull request
+  description, plus anything the worktree step reported as missing from the worktree.
+  `worktree_isolation=created` with `session=primary` previously read as unqualified
+  success and got no mention at all.
+
+### Changed
+- **REPORT, DO NOT REMEDY** is explicit in the `worktree` step's brief. "Never prompt" was
+  being read as licence to act unilaterally — closing a base-ref gap with `git merge`,
+  copying gitignored feature inputs into the worktree. Neither is this step's mandate, and
+  the first silently drags unpushed commits into the pull request.
+
+### Requires
+- The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+  extension, now at **2.2.0 or later** — the step relies on the `session` field and the
+  `EnterWorktree`-refused path added there.
+
 ## [0.3.0] — 2026-08-06
 
 ### Fixed
@@ -70,6 +97,7 @@ First published release.
   auto-commit the working tree, never block on CI, and stop only on a rebase
   conflict that cannot be resolved trivially.
 
+[0.3.1]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.1
 [0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.0
 [0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.2.0
 [0.1.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.1.0

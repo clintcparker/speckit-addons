@@ -3,8 +3,9 @@
 The harness turns a one-line feature description into an open pull request with
 before/after UI screenshots, unattended. Six extensions and two workflows compose
 into one chain: an explicit `worktree` step cuts the feature branch straight into
-a new git worktree and moves the agent session there, the spec/plan/tasks phases
-run inside it, baseline screenshots are captured while the tree still renders
+a new git worktree (and moves the agent session there when a human is present to
+approve it — see step 5), the spec/plan/tasks phases
+land inside it, baseline screenshots are captured while the tree still renders
 what the pull request's base commit would, the implementation lands, the same
 views are captured again, and `ship` commits, pushes, and opens the PR with the
 before/after tables embedded. Everything below installs through Spec Kit's own
@@ -44,15 +45,15 @@ is not installability. That gap is the entire reason
 
 | Add-on | Version | Source | What it contributes |
 |---|---|---|---|
-| [`worktrees`](../extensions/worktrees/) | 2.1.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run |
+| [`worktrees`](../extensions/worktrees/) | 2.2.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree |
 | [`git`](../extensions/git/) | 1.1.0 | hosted here | Feature-branch naming and numbering. The worktrees hook delegates to its `create-new-feature-branch.sh` to derive the branch name |
 | [`screenshots`](../extensions/screenshots/) | 0.1.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
 | `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) | `speckit.ship.run` — pre-flight, rebase, push, PR creation |
 | `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) | `speckit.staff-review.run` — review report into `FEATURE_DIR/reviews/` |
 | `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) | `speckit.qa.run` — QA report into `FEATURE_DIR/qa/` |
-| [`send-it`](../workflows/send-it/) | 0.3.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
-| [`send-it-checked`](../workflows/send-it-checked/) | 0.3.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
-| [`yolo`](../workflows/yolo/) | 0.2.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
+| [`send-it`](../workflows/send-it/) | 0.3.1 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
+| [`send-it-checked`](../workflows/send-it-checked/) | 0.3.1 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`yolo`](../workflows/yolo/) | 0.2.1 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
 
 The three first-party extensions are published from this repo as release assets
 with a `sha256` in the catalog. The three third-party ones are pinned pointers at
@@ -75,8 +76,12 @@ control those tags.
    extension's `create-new-feature-branch.sh --dry-run --json` for numbering and
    slug rules; creates the branch with `git worktree add -b` from `base_ref`
    (auto-detected as `origin/main` → `main` → `origin/master` → `master` → `HEAD`
-   when unset); and, because `enter_worktree: true`, moves the agent session into
-   the worktree. It runs *before* the spec is written because a branch can live
+   when unset); and, because `enter_worktree: true`, tries to move the agent
+   session into the worktree — which unattended it cannot, see step 5. It also
+   reports what the fresh worktree does *not* carry: a base ref behind its local
+   counterpart, and gitignored or untracked inputs the description names. Both are
+   reported and left alone; the step creates a branch in a worktree and repairs
+   nothing it merely observed. It runs *before* the spec is written because a branch can live
    in exactly one worktree: let `speckit.specify` create and check out the branch
    in the primary checkout first and `git worktree add` cannot claim it for as
    long as the primary stays there.
@@ -98,10 +103,32 @@ control those tags.
    tree or any stash: `worktree_isolation=failed`, the run continues in the
    primary, and `ship` puts that fact in the pull request description. Nothing of
    the user's is stashed, moved, or forced.
-5. **The session model.** Every later step runs *in the worktree*, because they
-   are all the same agent session and the working directory carries forward. The
-   primary checkout stays on its own branch, untouched. Nothing downstream may
-   assume the primary is on the feature branch.
+5. **The session model — and why an unattended run does not get one.** Moving the
+   session into the worktree needs the `EnterWorktree` tool, and that tool requires
+   interactive approval. **An unattended run has nobody to give it.** So the normal
+   outcome of `specify workflow run send-it` is `worktree_isolation=created` with
+   `session=primary`: the branch lives in its worktree, the agent session's working
+   directory is still the primary checkout, and every later step lands in the right
+   place only because the worktree step emitted
+
+   ```text
+   SPECIFY_INIT_DIR=<worktree path>
+   SPECIFY_FEATURE_DIRECTORY=<worktree path>/specs/<feature-dir>
+   ```
+
+   and each step honors them. Both are first-priority overrides in
+   `.specify/scripts/bash/common.sh`. This is a **degraded run**: nothing enforces that
+   the overrides are honored across seven remaining steps, which is exactly why `ship`
+   puts `session=primary` in the pull request description rather than letting it die in
+   a transcript.
+
+   When the tool *is* approved — an interactive run — the session really does move,
+   `session=worktree`, the working directory carries forward, and the overrides are
+   unnecessary. That was the only case documented before `worktrees` 2.2.0, and it is
+   not the case the harness actually runs in.
+
+   Either way the primary checkout stays on its own branch, untouched, and nothing
+   downstream may assume the primary is on the feature branch.
 6. **The rest of the chain.** `plan` → `tasks` → `screenshots-before` →
    `implement` → (`review` → `qa`, in `send-it-checked`) → `screenshots-after` →
    `ship`. The baseline capture has to sit between `tasks` and `implement`: at
@@ -167,13 +194,15 @@ Five things about that sequence:
   `workflow run` does.
 - **`worktrees` is no longer optional for any of these workflows.** All three
   dispatch `speckit.worktrees.create` as their first step, which fails at
-  dispatch when the extension is absent. It must be at **2.1.0 or later** — the
-  step relies on the idempotent case detection added there, and against 2.0.0 the
+  dispatch when the extension is absent. It must be at **2.2.0 or later** — the
+  workflows rely on the `session` field and the `EnterWorktree`-refused path added
+  there, and on the idempotent case detection added in 2.1.0. Against 2.0.0 the
   step and the `before_specify` hook would each derive a branch name and mint two
-  feature numbers.
+  feature numbers; against 2.1.0 an unattended run reports a bare
+  `worktree_isolation=created` that hides the fact that the session never moved.
 
 The forks are what make this a pure `catalog add` + `extension add` sequence with
-**no hand edits to `.specify/extensions.yml`**: `worktrees` 2.1.0 declares its
+**no hand edits to `.specify/extensions.yml`**: `worktrees` 2.2.0 declares its
 hook at `before_specify` priority 20, and the `git` fork declares no competing
 `before_specify` hook, so the branch is created once, in the worktree — and the
 workflows' own `worktree` step no-ops when the hook got there first. The
@@ -294,6 +323,24 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
   auto-commit hooks — and ship's instruction to commit everything outstanding
   before its pre-flight — will otherwise commit a SQLite database or a
   dev-server log.
+- **A feature whose inputs are not in version control cannot run in a worktree.**
+  A worktree is a fresh checkout of `base_ref`, so anything gitignored or never
+  committed — a `docs/` tree kept out of git, local fixtures, a `.env` — exists in
+  the primary and not in the worktree, by construction. Point a spec description
+  at `docs/ROADMAP.md` when `docs/` is gitignored and the run has no roadmap to
+  read. `worktrees` 2.2.0 reports this rather than papering over it: copying the
+  files across would build the feature against inputs the pull request can never
+  contain and no reviewer can see. Commit the inputs, or pass their content in the
+  description. This is the same hazard as the screenshot-state one above, running
+  in the opposite direction.
+- **An unattended run cannot enter its own worktree.** `EnterWorktree` needs
+  interactive approval. Expect `session=primary` and a run that stays correct only
+  because every step honors `SPECIFY_INIT_DIR`. See "The session model" above.
+- **Never let the worktree step repair what it reports.** A base ref behind local
+  `main` is a real hazard, and `git merge --ff-only main` in the worktree is the
+  wrong fix: it drags unpushed commits onto the feature branch, where they surface
+  in the pull request as if they were part of the feature. `base_ref` in
+  `worktree-config.yml` is the supported lever, and choosing it is the user's call.
 - **Sequential feature numbering collides under parallel worktrees.** Each
   worktree computes "the next number" independently from the same `specs/`
   directory and the same refs. Use timestamps, in both
