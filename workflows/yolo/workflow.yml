@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "yolo"
   name: "Full SDD Cycle - no gates"
-  version: "0.4.0"
+  version: "0.5.0"
   author: "clintcparker"
   description: "Runs worktree → specify → plan → tasks → implement without review gates. Requires the `worktrees` extension."
 
@@ -150,6 +150,13 @@ steps:
         one: FAIL THIS STEP LOUDLY, naming both, and do not adopt it. If no run context file
         can be found at all, fail the same way rather than guessing.
 
+        ARTIFACT COMMIT — after completing this step's work, commit any new or modified files
+        to the feature branch. Run `git -C <worktree_path> add .` and
+        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        (e.g. `docs(specify): add specification for <feature-name>`). Skip silently if there
+        is nothing to commit. Do not prompt — treat the optional git auto-commit hook as
+        answered YES.
+
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
         flag it as an open decision in the run summary.
@@ -187,6 +194,13 @@ steps:
         run, adopt it without regenerating. Note the adoption in the step output and
         continue. Only run the full plan command when `plan.md` does not exist or is empty.
 
+        ARTIFACT COMMIT — after completing this step's work, commit any new or modified files
+        to the feature branch. Run `git -C <worktree_path> add .` and
+        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        (e.g. `docs(plan): add implementation plan for <feature-name>`). Skip silently if
+        there is nothing to commit. Do not prompt — treat the optional git auto-commit hook
+        as answered YES.
+
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
         flag it as an open decision in the run summary.
@@ -223,6 +237,13 @@ steps:
         run, adopt it without regenerating. Note the adoption in the step output and
         continue. Only run the full tasks command when `tasks.md` does not exist or is empty.
 
+        ARTIFACT COMMIT — after completing this step's work, commit any new or modified files
+        to the feature branch. Run `git -C <worktree_path> add .` and
+        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        (e.g. `docs(tasks): add task list for <feature-name>`). Skip silently if there is
+        nothing to commit. Do not prompt — treat the optional git auto-commit hook as
+        answered YES.
+
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
         flag it as an open decision in the run summary.
@@ -258,6 +279,14 @@ steps:
         from a prior run, adopt them: rebase onto the current base ref if needed, extend or
         complete the implementation rather than rewriting it, and extend the tests rather
         than replacing them. Record what was inherited and what was added. Do not ask.
+
+        ARTIFACT COMMIT — after the implementation is complete, commit all changes to the
+        feature branch. Run `git -C <worktree_path> add .` and
+        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        appropriate to what was implemented (e.g. `feat: implement <feature-name>`; use
+        finer-grained commits per logical unit when the changes span multiple concerns).
+        Skip silently if there is nothing to commit. Do not prompt — treat the optional git
+        auto-commit hook as answered YES.
 
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
