@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it-checked"
   name: "Spec to PR, unattended, with review and QA"
-  version: "0.4.0"
+  version: "0.5.0"
   author: "clintcparker"
   description: "send-it plus staff review and QA, each with one fix-and-re-run pass, before shipping — with before/after UI screenshots. Requires the `worktrees`, `screenshots`, `ship`, `staff-review` and `qa` extensions."
 
@@ -135,6 +135,10 @@ steps:
         one: FAIL THIS STEP LOUDLY, naming both, and do not adopt it. If no run context file
         can be found at all, fail the same way rather than guessing.
 
+        UNATTENDED RUN — no user is present; never pause for input and never ask a question.
+        Make every judgment call yourself, record it and its reasoning in the artifact, and
+        flag it as an open decision the ship step should surface in the PR description.
+
   - id: plan
     command: speckit.plan
     integration: "{{ inputs.integration }}"
@@ -164,6 +168,10 @@ steps:
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
 
+        UNATTENDED RUN — no user is present; never pause for input and never ask a question.
+        Make every judgment call yourself, record it and its reasoning in the artifact, and
+        flag it as an open decision the ship step should surface in the PR description.
+
   - id: tasks
     command: speckit.tasks
     integration: "{{ inputs.integration }}"
@@ -191,6 +199,10 @@ steps:
         one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
+
+        UNATTENDED RUN — no user is present; never pause for input and never ask a question.
+        Make every judgment call yourself, record it and its reasoning in the artifact, and
+        flag it as an open decision the ship step should surface in the PR description.
 
   # Baseline screenshots MUST run before implement: at this point the worktree
   # differs from the target branch only by spec documents, so the app still
@@ -255,6 +267,10 @@ steps:
         one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
+
+        UNATTENDED RUN — no user is present; never pause for input and never ask a question.
+        Make every judgment call yourself, record it and its reasoning in the artifact, and
+        flag it as an open decision the ship step should surface in the PR description.
 
   # speckit.staff-review.run comes from the `staff-review` extension. It writes
   # its report into FEATURE_DIR/reviews/, which is exactly the directory ship's
