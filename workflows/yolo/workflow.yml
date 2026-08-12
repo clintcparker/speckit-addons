@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "yolo"
   name: "Full SDD Cycle - no gates"
-  version: "0.2.1"
+  version: "0.3.0"
   author: "clintcparker"
   description: "Runs worktree → specify → plan → tasks → implement without review gates. Requires the `worktrees` extension."
 
@@ -102,31 +102,128 @@ steps:
         close the gap, and no copying untracked files across. "Never prompt" is not licence
         to act unilaterally.
 
-        This workflow has no ship step, so there is no pull request to carry the outcome.
-        Record BOTH worktree_isolation and session in the run summary instead, along with
-        anything Outline step 4 reported, and state a recovered, failed, or degraded
-        isolation prominently — it is the only record the user gets.
+        PIN THE FEATURE — take Outline step 4 on every path out of this command, including
+        worktree_isolation=failed: write the run context with write-run-context.sh and
+        report run_context=<path> in the fields block. Every later step of this workflow
+        resolves FEATURE_DIR from that file and has nothing else to go on. If the script
+        exits 3, another unattended run owns the pointer in this primary checkout — report
+        run_context=collision naming both branches, and do NOT pass --force.
 
+        This workflow has no ship step, so there is no pull request to carry the outcome.
+        Record worktree_isolation, session AND run_context in the run summary instead, along
+        with anything Outline step 5 reported, and state a recovered, failed, degraded or
+        collided outcome prominently — it is the only record the user gets.
+
+  # Every step below re-states the same FEATURE IDENTITY block. That is not an oversight:
+  # the workflow engine has no step-output templating, so a step receives nothing but its
+  # own args — not the worktree step's report, not the previous step's output. Each one has
+  # to be told, in its own args, where to find the run context. See issue #1.
   - id: specify
     command: speckit.specify
     integration: "{{ inputs.integration }}"
     input:
-      args: "{{ inputs.spec }}"
+      args: >-
+        {{ inputs.spec }}
+
+        --- RUN CONTROL (not part of the feature description above) ---
+
+        FEATURE IDENTITY — resolve it from the run context, not from the repo. The worktree
+        step pinned this run's feature to `.specify/run-context.json`; look for it under
+        $SPECIFY_INIT_DIR first, then in the current directory, then in the primary
+        checkout. Take `branch`, `feature_dir` and `worktree_path` from it, and export
+        SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
+        SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
+        this step makes.
+
+        The directory named by `feature_dir` does not exist yet — create the spec THERE. Do
+        not mint a new feature number and do not derive one from `specs/`: the branch in the
+        run context is this run's feature, whatever the tree the session is standing in
+        looks like.
+
+        If a script resolves a feature the run context does not name, it has found the wrong
+        one: FAIL THIS STEP LOUDLY, naming both, and do not adopt it. If no run context file
+        can be found at all, fail the same way rather than guessing.
 
   - id: plan
     command: speckit.plan
     integration: "{{ inputs.integration }}"
     input:
-      args: "{{ inputs.spec }}"
+      args: >-
+        {{ inputs.spec }}
+
+        --- RUN CONTROL (not part of the feature description above) ---
+
+        FEATURE IDENTITY — resolve it from the run context, not from the repo. The worktree
+        step pinned this run's feature to `.specify/run-context.json`; look for it under
+        $SPECIFY_INIT_DIR first, then in the current directory, then in the primary
+        checkout. Take `branch`, `feature_dir` and `worktree_path` from it, and export
+        SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
+        SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
+        this step makes.
+
+        Never infer the feature from the current branch, from `.specify/feature.json`, or
+        from the newest directory under `specs/`. Right after a merge all three name the
+        PREVIOUS feature, and this run's session is usually standing in the primary
+        checkout, where that is exactly what they name. A helper script exiting 0 is not
+        evidence it found the right feature: `setup-plan.sh` exits 0 on the wrong one and
+        plants a template `plan.md` there.
+
+        If a script resolves a feature the run context does not name, it has found the wrong
+        one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
+        do not adopt it. If no run context file can be found at all, fail the same way
+        rather than guessing.
 
   - id: tasks
     command: speckit.tasks
     integration: "{{ inputs.integration }}"
     input:
-      args: "{{ inputs.spec }}"
+      args: >-
+        {{ inputs.spec }}
+
+        --- RUN CONTROL (not part of the feature description above) ---
+
+        FEATURE IDENTITY — resolve it from the run context, not from the repo. The worktree
+        step pinned this run's feature to `.specify/run-context.json`; look for it under
+        $SPECIFY_INIT_DIR first, then in the current directory, then in the primary
+        checkout. Take `branch`, `feature_dir` and `worktree_path` from it, and export
+        SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
+        SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
+        this step makes.
+
+        Never infer the feature from the current branch, from `.specify/feature.json`, or
+        from the newest directory under `specs/`. Right after a merge all three name the
+        PREVIOUS feature, and this run's session is usually standing in the primary
+        checkout, where that is exactly what they name. A helper script exiting 0 is not
+        evidence it found the right feature.
+
+        If a script resolves a feature the run context does not name, it has found the wrong
+        one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
+        do not adopt it. If no run context file can be found at all, fail the same way
+        rather than guessing.
 
   - id: implement
     command: speckit.implement
     integration: "{{ inputs.integration }}"
     input:
-      args: "{{ inputs.spec }}"
+      args: >-
+        {{ inputs.spec }}
+
+        --- RUN CONTROL (not part of the feature description above) ---
+
+        FEATURE IDENTITY — resolve it from the run context, not from the repo. The worktree
+        step pinned this run's feature to `.specify/run-context.json`; look for it under
+        $SPECIFY_INIT_DIR first, then in the current directory, then in the primary
+        checkout. Take `branch`, `feature_dir` and `worktree_path` from it, and export
+        SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
+        SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
+        this step makes.
+
+        Every file this step writes belongs in the tree named by `worktree_path`. Never
+        infer the feature from the current branch, from `.specify/feature.json`, or from the
+        newest directory under `specs/`; right after a merge all three name the PREVIOUS
+        feature, and implementing against those is how a run edits the wrong tree.
+
+        If a script resolves a feature the run context does not name, it has found the wrong
+        one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
+        do not adopt it. If no run context file can be found at all, fail the same way
+        rather than guessing.

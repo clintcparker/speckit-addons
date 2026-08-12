@@ -5,6 +5,34 @@ All notable changes to the `yolo` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-12
+
+### Fixed
+- **Every step after `worktree` now resolves the feature from the run context file instead of
+  re-deriving it.** The engine has no step-output templating: `specify`, `plan`, `tasks` and
+  `implement` received only `{{ inputs.spec }}`, so each one independently answered "which
+  feature is this?" from the current branch and `.specify/feature.json` — and an unattended
+  run's session is usually standing in the *primary* checkout, where right after a merge both
+  name the previously shipped feature. Each step's `args` now carries an explicit FEATURE
+  IDENTITY block: read `.specify/run-context.json` (`$SPECIFY_INIT_DIR` first, then the current
+  directory, then the primary checkout), take `branch`/`feature_dir`/`worktree_path` from it,
+  export the two `SPECIFY_*` overrides, and fail the step loudly if a helper script resolves a
+  feature the run context does not name.
+- **A script exiting 0 is no longer treated as evidence it found the right feature.** It is not:
+  `setup-plan.sh` exits 0 on the wrong feature and plants a template `plan.md` there. The steps
+  are told so explicitly.
+- The `worktree` step writes the run context (`speckit.worktrees.create` `## Outline` step 4) on
+  every path, including `worktree_isolation=failed`, and reports `run_context` as a third field.
+  With no ship step here, the run summary carries it along with the other two.
+
+### Changed
+- The feature description leads each step's `args`, with the identity block fenced below a
+  `--- RUN CONTROL ---` marker, so a preamble cannot be mistaken for part of the spec.
+
+### Requires
+- The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+  extension, now at **2.3.0 or later** — the run context file and its writer are new there.
+
 ## [0.2.1] — 2026-08-06
 
 ### Fixed
@@ -88,6 +116,7 @@ with corrections.
   inherited from the built-in `speckit` workflow and referenced by no step, so
   it prompted for a value that changed nothing.
 
+[0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.3.0
 [0.2.1]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.2.1
 [0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.2.0
 [0.1.1]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.1.1

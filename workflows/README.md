@@ -7,9 +7,9 @@ installable.
 
 | ID | Version | Description |
 |---|---|---|
-| [`yolo`](yolo/) | 0.2.1 | Gate-free core cycle — `worktree` → `specify` → `plan` → `tasks` → `implement` |
-| [`send-it`](send-it/) | 0.3.1 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
-| [`send-it-checked`](send-it-checked/) | 0.3.1 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
+| [`yolo`](yolo/) | 0.3.0 | Gate-free core cycle — `worktree` → `specify` → `plan` → `tasks` → `implement` |
+| [`send-it`](send-it/) | 0.4.0 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
+| [`send-it-checked`](send-it-checked/) | 0.4.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
 
 ## Install
 

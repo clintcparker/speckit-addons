@@ -41,12 +41,12 @@ Or install this one workflow directly, without registering the catalog:
 
 ```bash
 specify workflow add yolo --from \
-  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.2.0/workflows/yolo/workflow.yml
+  https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.3.0/workflows/yolo/workflow.yml
 ```
 
 As of 0.2.0 the first step needs the
 [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
-extension at **2.2.0 or later**, and fails at dispatch without it. Spec Kit's
+extension at **2.3.0 or later**, and fails at dispatch without it. Spec Kit's
 workflow schema cannot declare an extension dependency — `requires` accepts only
 `speckit_version` and `integrations` — so install it yourself:
 
@@ -107,6 +107,26 @@ For contrast, the built-in `speckit` workflow interposes a `gate` step after
 `specify` and again after `plan`, each of which pauses the run until you approve
 it. YOLO is that graph with the two gates removed.
 
+### How the steps agree on which feature they are building
+
+The engine has no step-output templating — a step receives its own `args` and
+nothing else, not the previous step's output. Left to themselves, `specify`,
+`plan`, `tasks` and `implement` each answer "which feature is this?" from the
+current branch and `.specify/feature.json`, and an unattended run's session is
+usually standing in the *primary* checkout, where right after a merge both name
+the feature that just shipped.
+
+So the `worktree` step writes `.specify/run-context.json` — branch, absolute
+feature directory, worktree path, isolation and session — and every step after
+it carries an explicit instruction to resolve `FEATURE_DIR` from that file,
+never from the branch or `feature.json`, and to **fail loudly** rather than
+adopt a feature the run context does not name. A helper script exiting 0 is not
+evidence it found the right one: `setup-plan.sh` exits 0 on the wrong feature
+and plants a template `plan.md` there.
+
+That instruction is repeated verbatim in every step's `args`. It has to be —
+there is nowhere else to put it.
+
 ## Requirements
 
 Spec Kit `>=0.8.12` — the first release that resolves `integration: "auto"`
@@ -115,7 +135,7 @@ older versions `auto` is treated as a literal integration name and dispatch
 fails.
 
 The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
-extension at **2.2.0 or later**, for the `worktree` step — see [Install](#install).
+extension at **2.3.0 or later**, for the `worktree` step — see [Install](#install).
 
 The `requires.integrations` list names `claude` as an advisory compatibility
 hint, not a restriction. The four SDD commands are core Spec Kit commands that

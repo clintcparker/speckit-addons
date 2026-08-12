@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.3.0 (2026-08-12)
+
+### Added
+- **`## Outline` step 4 pins the run's feature identity to a file.** Everything this command decides —
+  branch, worktree, feature directory — was previously known only to the step that ran it. A workflow
+  engine with no step-output templating hands the next step nothing but its own args, so each one
+  re-answered "which feature is this?" from the current branch and `.specify/feature.json`. Straight
+  after a merge both name the *previous* feature: two concurrent unattended runs implemented their
+  features correctly and then reviewed, QA'd, screenshotted and shipped the last one that merged,
+  while every helper script exited 0. The command now writes the answer down.
+- **`scripts/bash/write-run-context.sh`**, the deterministic writer. It emits
+  `<worktree>/.specify/run-context.json` — `run_id`, `branch`, absolute `feature_dir`,
+  `worktree_path`, `primary_path`, `base_ref`, `worktree_isolation`, `session` — and, when the session
+  is standing somewhere else, a second copy at `<primary>/.specify/run-context.json` pointing at the
+  first. `session=primary` is the normal unattended outcome and a step standing there has no other way
+  to find the worktree.
+- **`run_context=<path>` is a third machine-readable field** in step 7's fields block, alongside
+  `worktree_isolation` and `session`. It is an address rather than a status: it is what a later step
+  resolves `FEATURE_DIR` from instead of guessing.
+- **Concurrent runs are refused, not silently repointed.** When another run's pointer is already in
+  the primary checkout and its worktree *and* branch are both still live, the script exits 3 and
+  leaves it alone — displacing it would aim the same drift at that run instead. This run's canonical
+  context is still written, and the command reports `run_context=collision` naming both branches. A
+  pointer whose worktree or branch is gone is litter, not a collision, and is replaced.
+- The context file is never committable: the script appends its path to `$GIT_COMMON_DIR/info/exclude`,
+  which is local, untracked, and shared by every worktree of the repo. `ship`'s brief is "commit every
+  uncommitted change", so an unignored file would land in the pull request.
+
+### Changed
+- `## Outline` steps 4, 5 and 6 renumbered to 5, 6 and 7 to make room. References inside the command
+  and in the `send-it`, `send-it-checked` and `yolo` workflows were updated with them.
+
 ## 2.2.0 (2026-08-06)
 
 ### Added
