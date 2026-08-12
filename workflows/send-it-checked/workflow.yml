@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it-checked"
   name: "Spec to PR, unattended, with review and QA"
-  version: "0.5.0"
+  version: "0.6.0"
   author: "clintcparker"
   description: "send-it plus staff review and QA, each with one fix-and-re-run pass, before shipping — with before/after UI screenshots. Requires the `worktrees`, `screenshots`, `ship`, `staff-review` and `qa` extensions."
 
@@ -126,9 +126,15 @@ steps:
         SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
         this step makes.
 
-        The directory named by `feature_dir` does not exist yet — create the spec THERE. Do
-        not mint a new feature number and do not derive one from `specs/`: the branch in the
-        run context is this run's feature, whatever the tree the session is standing in
+        PRIOR WORK — before running the spec command, check whether `feature_dir` already
+        exists and contains a spec document. If it does, this is a resumed run: adopt the
+        existing spec without regenerating it, note the adoption in the step output, and
+        continue. Do not mint a second branch and do not ask. If the existing spec is
+        incomplete, extend it in place and record what was added. Only run the full spec
+        command when `feature_dir` does not yet exist or is empty.
+
+        Do not mint a new feature number and do not derive one from `specs/`: the branch in
+        the run context is this run's feature, whatever the tree the session is standing in
         looks like.
 
         If a script resolves a feature the run context does not name, it has found the wrong
@@ -168,6 +174,10 @@ steps:
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
 
+        PRIOR WORK — if `feature_dir` already contains a completed `plan.md` from a prior
+        run, adopt it without regenerating. Note the adoption in the step output and
+        continue. Only run the full plan command when `plan.md` does not exist or is empty.
+
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
         flag it as an open decision the ship step should surface in the PR description.
@@ -199,6 +209,10 @@ steps:
         one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
+
+        PRIOR WORK — if `feature_dir` already contains a completed `tasks.md` from a prior
+        run, adopt it without regenerating. Note the adoption in the step output and
+        continue. Only run the full tasks command when `tasks.md` does not exist or is empty.
 
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
@@ -267,6 +281,11 @@ steps:
         one: FAIL THIS STEP LOUDLY, naming both the resolved feature and the pinned one, and
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
+
+        PRIOR WORK — if `worktree_path` already contains uncommitted or committed changes
+        from a prior run, adopt them: rebase onto the current base ref if needed, extend or
+        complete the implementation rather than rewriting it, and extend the tests rather
+        than replacing them. Record what was inherited and what was added. Do not ask.
 
         UNATTENDED RUN — no user is present; never pause for input and never ask a question.
         Make every judgment call yourself, record it and its reasoning in the artifact, and
