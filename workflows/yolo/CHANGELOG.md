@@ -5,6 +5,16 @@ All notable changes to the `yolo` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-08-12
+
+### Fixed
+- **Plain `git` and test commands now target the worktree, not the primary checkout.**
+  The ARTIFACT COMMIT blocks in 0.5.0 used `git -C <worktree_path>` for commits, but other
+  cwd-relative operations in each step defaulted to the primary checkout when `session=primary`.
+  Each non-worktree step now carries a WORKTREE INVARIANT block requiring `git -C <worktree_path>`
+  for every git command and absolute paths under `<worktree_path>/` for every file write.
+  Finding yourself about to operate on the primary checkout is a failed step, not a workaround.
+
 ## [0.5.0] — 2026-08-12
 
 ### Fixed

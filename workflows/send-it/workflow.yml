@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it"
   name: "Spec to PR, unattended"
-  version: "0.6.0"
+  version: "0.6.1"
   author: "clintcparker"
   description: "worktree → specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `worktrees`, `screenshots` and `ship` extensions."
 
@@ -128,6 +128,12 @@ steps:
         SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
         this step makes.
 
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files to absolute paths under `<worktree_path>/`.
+        Finding yourself about to operate on the primary checkout is a failed step, not a
+        workaround — stop and report rather than proceeding.
+
         PRIOR WORK — before running the spec command, check whether `feature_dir` already
         exists and contains a spec document. If it does, this is a resumed run: adopt the
         existing spec without regenerating it, note the adoption in the step output, and
@@ -170,6 +176,12 @@ steps:
         SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
         SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
         this step makes.
+
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files to absolute paths under `<worktree_path>/`.
+        Finding yourself about to operate on the primary checkout is a failed step, not a
+        workaround — stop and report rather than proceeding.
 
         Never infer the feature from the current branch, from `.specify/feature.json`, or
         from the newest directory under `specs/`. Right after a merge all three name the
@@ -214,6 +226,12 @@ steps:
         SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
         SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
         this step makes.
+
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files to absolute paths under `<worktree_path>/`.
+        Finding yourself about to operate on the primary checkout is a failed step, not a
+        workaround — stop and report rather than proceeding.
 
         Never infer the feature from the current branch, from `.specify/feature.json`, or
         from the newest directory under `specs/`. Right after a merge all three name the
@@ -262,6 +280,12 @@ steps:
         invocation this step makes. The manifest and the images belong under that
         `feature_dir`, and the app to build and drive is the one in `worktree_path`.
 
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files to absolute paths under `<worktree_path>/`.
+        Finding yourself about to operate on the primary checkout is a failed step, not a
+        workaround — stop and report rather than proceeding.
+
         Never infer the feature from the current branch, from `.specify/feature.json`,
         or from the newest directory under `specs/` — right after a merge all three name
         the PREVIOUS feature, and this run's session is usually standing in the primary
@@ -301,6 +325,12 @@ steps:
         SPECIFY_INIT_DIR=<worktree_path> (when non-empty) and
         SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
         this step makes.
+
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files to absolute paths under `<worktree_path>/`.
+        Finding yourself about to operate on the primary checkout is a failed step, not a
+        workaround — stop and report rather than proceeding.
 
         Every file this step writes belongs in the tree named by `worktree_path`. Never
         infer the feature from the current branch, from `.specify/feature.json`, or from the
@@ -347,6 +377,12 @@ steps:
         feature the run context does not name, or no run context can be found, FAIL THIS
         STEP LOUDLY naming what you found.
 
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files to absolute paths under `<worktree_path>/`.
+        Finding yourself about to operate on the primary checkout is a failed step, not a
+        workaround — stop and report rather than proceeding.
+
         ARTIFACT COMMIT — after the capture pass, commit any new or modified files to the
         feature branch. Run `git -C <worktree_path> add .` and
         `git -C <worktree_path> commit` with a descriptive Conventional Commit message
@@ -379,6 +415,13 @@ steps:
         QA reports and screenshots to read are under `feature_dir`; the tree to commit
         from is `worktree_path`. Export SPECIFY_INIT_DIR and SPECIFY_FEATURE_DIRECTORY
         from those values for every `.specify/scripts/**` invocation.
+
+        WORKTREE INVARIANT — all writes in this step happen in the run's worktree
+        (`worktree_path`), never in the primary checkout. For every git command use
+        `git -C <worktree_path>`; write files and push from absolute paths under
+        `<worktree_path>/`. Finding yourself about to commit or push from the primary
+        checkout is a failed step, not a workaround — stop and report rather than
+        proceeding.
 
         Never infer the feature from the current branch, from `.specify/feature.json`, or
         from the newest directory under `specs/`. This run's session is usually standing

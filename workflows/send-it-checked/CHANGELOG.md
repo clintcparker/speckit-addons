@@ -5,6 +5,21 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-08-12
+
+### Fixed
+- **Plain `git`, `gh`, and test commands now target the worktree, not the primary checkout.**
+  The ARTIFACT COMMIT blocks in 0.7.0 already used `git -C <worktree_path>` for the commit
+  itself, but other operations in each step (code fixes in `review`, app builds in
+  `screenshots-before`/`screenshots-after`, pushes in `ship`) defaulted to the working
+  directory — the primary checkout when `session=primary`. This produced the 2026-08-12
+  `send-it-checked` post-mortem failures: `screenshots-before` committed to `main`, `review`
+  left fixes as uncommitted state on `main`, and `ship` had to cut a branch at `main`'s tip
+  to avoid a `main→main` PR. Each non-worktree step now carries a WORKTREE INVARIANT block
+  that makes the requirement explicit for every operation: use `git -C <worktree_path>` for
+  all git commands and write files to absolute paths under `<worktree_path>/`. Finding
+  yourself about to operate on the primary checkout is a failed step, not a workaround.
+
 ## [0.7.0] — 2026-08-12
 
 ### Fixed

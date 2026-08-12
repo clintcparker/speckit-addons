@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.3.1 (2026-08-12)
+
+### Fixed
+- **`## Outline` step 3 now documents that the override applies to ALL commands, not just
+  `.specify/scripts/**`.** The `SPECIFY_INIT_DIR` override is honored by
+  `.specify/scripts/bash/common.sh`, but plain `git`, `gh`, and test commands default to cwd
+  (the primary checkout) regardless. Step 3 previously stated only that `SPECIFY_INIT_DIR` must
+  be exported "for every `.specify/scripts/**` invocation", which left a gap: steps reading
+  the instructions saw script invocations covered but were not told that every other command also
+  needed to target `worktree_path` explicitly. The updated text makes the full requirement
+  explicit: use `git -C <worktree_path>` for every git command, write files to absolute paths
+  under `<worktree_path>/`, and treat any operation defaulting to cwd as targeting the wrong
+  tree. This documents the invariant the worktree-first flow requires; it does not change what
+  the extension installs.
+
 ## 2.3.0 (2026-08-12)
 
 ### Added

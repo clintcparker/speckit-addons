@@ -152,6 +152,13 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    the branch name. These belong in the structured fields block precisely because prose gets skimmed
    and this is the only thing keeping the rest of the run out of the wrong tree.
 
+   The override covers script invocations — it does not automatically redirect plain `git`, `gh`, or
+   test commands, which default to cwd (the primary checkout). Every later step must therefore treat
+   `worktree_path` as the cwd for **all** operations: use `git -C <worktree_path>` for every git
+   command, write files to absolute paths under `<worktree_path>/`, and run any other cwd-relative
+   command from that directory. Finding a step about to operate on the primary checkout instead of
+   the worktree is a bug in that step, not a workaround.
+
    `session=primary` is a **degraded run**. It stays correct only as long as every later step honors
    the overrides, and nothing enforces that. A workflow that ships must surface it in the pull request
    description.
