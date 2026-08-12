@@ -45,15 +45,15 @@ is not installability. That gap is the entire reason
 
 | Add-on | Version | Source | What it contributes |
 |---|---|---|---|
-| [`worktrees`](../extensions/worktrees/) | 2.2.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree |
+| [`worktrees`](../extensions/worktrees/) | 2.3.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree; since 2.3.0 it also writes the run context file every later step reads its feature identity from |
 | [`git`](../extensions/git/) | 1.1.0 | hosted here | Feature-branch naming and numbering. The worktrees hook delegates to its `create-new-feature-branch.sh` to derive the branch name |
 | [`screenshots`](../extensions/screenshots/) | 0.1.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
 | `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) | `speckit.ship.run` — pre-flight, rebase, push, PR creation |
 | `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) | `speckit.staff-review.run` — review report into `FEATURE_DIR/reviews/` |
 | `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) | `speckit.qa.run` — QA report into `FEATURE_DIR/qa/` |
-| [`send-it`](../workflows/send-it/) | 0.3.1 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
-| [`send-it-checked`](../workflows/send-it-checked/) | 0.3.1 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
-| [`yolo`](../workflows/yolo/) | 0.2.1 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
+| [`send-it`](../workflows/send-it/) | 0.4.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
+| [`send-it-checked`](../workflows/send-it-checked/) | 0.4.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`yolo`](../workflows/yolo/) | 0.3.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
 
 The three first-party extensions are published from this repo as release assets
 with a `sha256` in the catalog. The three third-party ones are pinned pointers at
@@ -129,7 +129,36 @@ control those tags.
 
    Either way the primary checkout stays on its own branch, untouched, and nothing
    downstream may assume the primary is on the feature branch.
-6. **The rest of the chain.** `plan` → `tasks` → `screenshots-before` →
+6. **The run context pins which feature this is.** The overrides above only help a step
+   that already knows to use them, and the engine has **no step-output templating**: a
+   step receives its own `args` and nothing else — not the worktree step's report, not
+   the previous step's output. Left to themselves, every step answers "which feature is
+   this?" from the current branch and `.specify/feature.json`, and the session is
+   standing in the primary checkout, where right after a merge both name the feature
+   that just shipped. That is not a hypothetical: two concurrent unattended runs
+   implemented their features correctly and then reviewed, QA'd, screenshotted and
+   shipped the previous, already-merged one, while every helper script exited 0.
+
+   So `worktrees` 2.3.0 writes `<worktree>/.specify/run-context.json` — `run_id`,
+   `branch`, absolute `feature_dir`, `worktree_path`, `primary_path`, `base_ref`,
+   `worktree_isolation`, `session` — plus a pointer copy at
+   `<primary>/.specify/run-context.json` when the session stays in the primary, since a
+   step standing there has no other way to find the worktree. Neither copy is
+   committable; the path goes into `$GIT_COMMON_DIR/info/exclude`.
+
+   Every step after `worktree` in all three workflows carries a FEATURE IDENTITY block
+   in its `args`: read that file, take `branch`/`feature_dir`/`worktree_path` from it,
+   export the two `SPECIFY_*` overrides from those values, and **fail the step loudly**
+   rather than adopt a feature the run context does not name. `ship` refuses to commit,
+   push, or open a pull request at all when the context is missing or disagrees. A
+   script exiting 0 is not evidence it found the right feature — `setup-plan.sh` exits 0
+   on the wrong one and plants a template `plan.md` there.
+
+   The block is repeated verbatim in every step because there is nowhere else to put it.
+   And there is exactly one pointer per primary checkout, so **one unattended run per
+   primary checkout**: a second is reported as `run_context=collision` and surfaced in
+   the pull request rather than silently repointing the first.
+7. **The rest of the chain.** `plan` → `tasks` → `screenshots-before` →
    `implement` → (`review` → `qa`, in `send-it-checked`) → `screenshots-after` →
    `ship`. The baseline capture has to sit between `tasks` and `implement`: at
    that point the worktree differs from the base only by spec documents, so the
@@ -137,7 +166,7 @@ control those tags.
    `send-it-checked` the after-capture sits after `qa` rather than after
    `implement`, so it shows the tree that actually ships rather than one the
    review pass has since changed.
-7. **`ship` closes it out.** It commits what is outstanding, rebases onto the
+8. **`ship` closes it out.** It commits what is outstanding, rebases onto the
    target branch, pushes, builds the PR description — including one screenshot
    table per captured target, with Before and After columns and a row per
    viewport, pinned to the pushed head SHA — and opens the pull request.
@@ -194,12 +223,16 @@ Five things about that sequence:
   `workflow run` does.
 - **`worktrees` is no longer optional for any of these workflows.** All three
   dispatch `speckit.worktrees.create` as their first step, which fails at
-  dispatch when the extension is absent. It must be at **2.2.0 or later** — the
-  workflows rely on the `session` field and the `EnterWorktree`-refused path added
-  there, and on the idempotent case detection added in 2.1.0. Against 2.0.0 the
-  step and the `before_specify` hook would each derive a branch name and mint two
-  feature numbers; against 2.1.0 an unattended run reports a bare
-  `worktree_isolation=created` that hides the fact that the session never moved.
+  dispatch when the extension is absent. It must be at **2.3.0 or later** — every
+  step after the first resolves its feature from the run context file written
+  there. The workflows also rely on the `session` field and the
+  `EnterWorktree`-refused path added in 2.2.0, and on the idempotent case
+  detection added in 2.1.0. Against 2.0.0 the step and the `before_specify` hook
+  would each derive a branch name and mint two feature numbers; against 2.1.0 an
+  unattended run reports a bare `worktree_isolation=created` that hides the fact
+  that the session never moved; against 2.2.0 there is no run context to read, so
+  every step falls back to re-deriving the feature and the back half of the run
+  drifts onto whatever merged last.
 
 The forks are what make this a pure `catalog add` + `extension add` sequence with
 **no hand edits to `.specify/extensions.yml`**: `worktrees` 2.2.0 declares its

@@ -137,7 +137,7 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
 
    All three land in the same state: the worktree is real and correct, and only the session's working
    directory is wrong. **Do not silently write the spec into the primary checkout, and do not report
-   this as an unqualified success.** Report `session=primary` and emit the override block in step 6's
+   this as an unqualified success.** Report `session=primary` and emit the override block in step 7's
    fields, verbatim:
 
    ```text
@@ -160,7 +160,45 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    configuration)`, which is a choice rather than a degradation. `--in-place`/`--no-worktree` creates
    no worktree at all; there is nothing to enter and no override to emit.
 
-4. **Report what the new worktree does not carry.** A worktree is a fresh checkout of `base_ref`, so
+4. **Pin the run's feature identity to a file.** Everything decided above — which branch, which
+   worktree, which feature directory — is known only to this step. A workflow engine with no
+   step-output templating hands the next step nothing but its own args, so each one re-answers "which
+   feature is this?" from the current branch and `.specify/feature.json`. Straight after a merge both
+   name the *previous* feature, and the back half of a run drifts onto it while every script still
+   exits 0. Write the answer down instead:
+
+   ```bash
+   bash .specify/extensions/worktrees/scripts/bash/write-run-context.sh \
+     --branch "$BRANCH_NAME" \
+     --isolation created|already|entered|recovered|failed \
+     --session worktree|primary \
+     [--worktree-path <path from the script's JSON>] \
+     [--base-ref <resolved base ref>] \
+     [--feature-dir <path>]
+   ```
+
+   Run it on **every** path through this command, including `worktree_isolation=failed` — the run
+   with no worktree is the one that most needs its feature pinned. Omit `--worktree-path` when no
+   worktree exists; the script then writes the context into the primary checkout, which is where that
+   run executes. Pass `--feature-dir` only when the spec directory is already known and its name
+   differs from the branch; otherwise the default (`<tree>/specs/<branch>`) is the same path step 3
+   puts in `SPECIFY_FEATURE_DIRECTORY`, and the two must not disagree.
+
+   The script writes `<worktree>/.specify/run-context.json` and, when the session is standing
+   somewhere else, a second copy at `<primary>/.specify/run-context.json` pointing at the first.
+   Neither is committable — it appends the path to `$GIT_COMMON_DIR/info/exclude`, which is local and
+   covers every worktree of the repo. Report the canonical path as `run_context=<path>` in step 7's
+   fields; that path is what every later step resolves `FEATURE_DIR` from.
+
+   **Exit 3 is a collision**, not a failure to write: another unattended run already owns the
+   pointer in this primary checkout, and its worktree and branch are both still live. Displacing it
+   would aim this exact drift at *that* run instead, so the script refuses. This run's canonical
+   context was still written. Report `run_context=collision` naming both branches, say plainly that
+   two unattended runs cannot share one primary checkout, and continue — every remaining step now
+   depends on `SPECIFY_INIT_DIR` being exported, because the pointer in the primary belongs to
+   somebody else. Do not pass `--force` to win the race.
+
+5. **Report what the new worktree does not carry.** A worktree is a fresh checkout of `base_ref`, so
    two classes of thing the primary has can be silently absent. Both are *reported*, never repaired —
    see `## Rules`.
 
@@ -182,9 +220,9 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
      feature whose input is not in version control cannot be reproduced from the branch, and a loud
      early report beats a run built on files the pull request will never contain.
 
-5. **Verify spec artifacts** — only when the worktree already existed, or on a manual call. Under `before_specify` the worktree is new and intentionally has no spec yet; skip this step. Otherwise check `specs/<feature-dir>/` in the worktree and list which artifacts are present (spec.md, plan.md, tasks.md).
+6. **Verify spec artifacts** — only when the worktree already existed, or on a manual call. Under `before_specify` the worktree is new and intentionally has no spec yet; skip this step. Otherwise check `specs/<feature-dir>/` in the worktree and list which artifacts are present (spec.md, plan.md, tasks.md).
 
-6. **Report**: Output a summary — the table, whichever step 4 notes actually fired, and the fields
+7. **Report**: Output a summary — the table, whichever step 5 notes actually fired, and the fields
    block. Nothing else; every later step of an unattended run reads this output as its context.
 
    ````markdown
@@ -198,10 +236,12 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    | **Worktree path** | /Users/me/code/MyProject--005-user-auth |
    | **Isolation** | created |
    | **Session** | worktree |
+   | **Run context** | /Users/me/code/MyProject--005-user-auth/.specify/run-context.json |
 
    ```text
    worktree_isolation=created
    session=worktree
+   run_context=/Users/me/code/MyProject--005-user-auth/.specify/run-context.json
    ```
 
    **Next steps:**
@@ -209,8 +249,8 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    - Run `/speckit-worktrees-list` to see all active worktrees
    ````
 
-   Two machine-readable fields, and they are **orthogonal** — one describes the worktree, the other
-   describes where the session is standing:
+   Three machine-readable fields. The first two are **orthogonal** — one describes the worktree, the
+   other describes where the session is standing:
 
    **`worktree_isolation`** carries step 0's outcome verbatim: `created` (case 3), `already` (case 1
    no-op), `entered` (case 2, worktree existed), `recovered` (the primary was moved off the branch —
@@ -226,9 +266,15 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    is exactly the combination a single enum could not express: the worktree is right and nothing is
    standing in it. Do not report it as clean.
 
+   **`run_context`** carries step 4's outcome: the absolute path of the canonical
+   `run-context.json`, or `collision` when another run owns the pointer in this primary checkout.
+   Unlike the other two it is not a status — it is the address every later step needs in order to
+   resolve `FEATURE_DIR` without guessing.
+
    **What must reach the end of the run.** Any of: `worktree_isolation` outside
-   {`created`, `already`, `entered`}; `session=primary`; or either step 4 note firing. A ship step
-   puts these in the pull request description rather than letting them die in a transcript.
+   {`created`, `already`, `entered`}; `session=primary`; `run_context=collision`; or either step 5
+   note firing. A ship step puts these in the pull request description rather than letting them die
+   in a transcript.
 
 ## Rules
 
@@ -242,6 +288,12 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
   unilaterally — it means decide the cases this command defines and *report* everything else. A
   repair nobody asked for is worse than the condition it fixed, because the condition was visible and
   the repair is not
+- **Always write the run context** — step 4 runs on every path out of this command, including
+  `worktree_isolation=failed` and the case-1 no-op. It is the only record of which feature this run
+  owns, and the steps that need it most are the ones furthest from here. A run whose context file was
+  never written is a run that will ship the previous feature
+- **Never displace another run's pointer** — the script's exit 3 is a decision, not an error. `--force`
+  exists for an operator clearing litter by hand, never for this command resolving a race
 - **Default behavior is to create a worktree** — only skip if the user explicitly passes `--in-place` or `--no-worktree`, or `auto_create` is `false` in config and this is a hook call
 - **One worktree per branch** — never create a duplicate; report the existing path and exit successfully
 - **Never modify the primary checkout, with one narrow exception** — no `checkout`, no `switch`, no stash in normal operation. The primary stays where the user left it, which is the whole point of creating the branch inside the worktree. The single exception is step 0's recovery path, where the feature branch is *already* checked out in the primary and the primary is provably clean (empty `git status --porcelain`, empty `git stash list`). There, and only there, `git checkout <base>` is permitted so the branch can be released to a worktree — and the move must be reported loudly

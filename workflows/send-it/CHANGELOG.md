@@ -5,6 +5,45 @@ All notable changes to the `send-it` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-12
+
+### Fixed
+- **Feature identity is pinned for the whole run instead of re-derived by every step.** The
+  worktree step emitted carry-forward fields and the prose said "carry forward" — but nothing
+  carried them. The engine has no step-output templating: `specify`/`plan`/`tasks`/`implement`
+  received only `{{ inputs.spec }}` and the back-half steps only their mode text, so each one
+  independently answered "which feature is this?" from the current branch and
+  `.specify/feature.json`. An unattended run's session is usually standing in the *primary*
+  checkout, where right after a merge both name the previously shipped feature — which is how
+  a run can implement its feature correctly and then screenshot and ship a different one.
+- The `worktree` step now writes `.specify/run-context.json` (`speckit.worktrees.create`
+  `## Outline` step 4) on every path, including `worktree_isolation=failed`, and reports
+  `run_context` as a third machine-readable field.
+- **Every step after it carries an explicit FEATURE IDENTITY block** in its `args`: read the
+  run context (`$SPECIFY_INIT_DIR` first, then the current directory, then the primary
+  checkout), take `branch`/`feature_dir`/`worktree_path` from it, export the two `SPECIFY_*`
+  overrides, and never infer the feature from the branch, from `feature.json`, or from the
+  newest directory under `specs/`. If anything resolves a feature the run context does not
+  name, the step fails loudly instead of adopting it — a script exiting 0 is not evidence it
+  found the right feature, since `setup-plan.sh` exits 0 on the wrong one and plants a
+  template `plan.md` there.
+- **`ship` stops rather than guesses.** A missing or disagreeing run context means no commit,
+  no push, and no pull request. It is the step that drifted, and the one whose mistake is
+  hardest to notice.
+
+### Added
+- `ship` surfaces `run_context=collision` near the top of the pull request description: a
+  second unattended run owned the run-context pointer in the primary checkout, so both runs'
+  later steps were one unexported environment variable away from building the wrong feature.
+
+### Changed
+- The feature description leads each step's `args`, with the identity block fenced below a
+  `--- RUN CONTROL ---` marker, so a preamble cannot be mistaken for part of the spec.
+
+### Requires
+- The [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees)
+  extension, now at **2.3.0 or later** — the run context file and its writer are new there.
+
 ## [0.3.1] — 2026-08-06
 
 ### Fixed
@@ -97,6 +136,7 @@ First published release.
   auto-commit the working tree, never block on CI, and stop only on a rebase
   conflict that cannot be resolved trivially.
 
+[0.4.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.4.0
 [0.3.1]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.1
 [0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.0
 [0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.2.0

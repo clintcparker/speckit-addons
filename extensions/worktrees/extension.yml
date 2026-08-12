@@ -3,7 +3,7 @@ schema_version: "1.0"
 extension:
   id: worktrees
   name: "Worktrees"
-  version: "2.2.0"
+  version: "2.3.0"
   description: "Default-on worktree isolation for parallel agents — worktree-first flow, sibling or nested layout"
   author: "clintcparker"
   repository: "https://github.com/clintcparker/speckit-addons"

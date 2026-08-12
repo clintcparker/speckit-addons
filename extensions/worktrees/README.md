@@ -99,13 +99,14 @@ It fires only when a run actually *starts* at `/speckit.specify`. A resumed run,
 
 ## Reported outcomes
 
-The command reports **two** machine-readable fields, and as of 2.2.0 they are orthogonal — one
-describes the worktree, the other describes where the agent session is standing.
+The command reports **three** machine-readable fields. The first two are orthogonal — one describes
+the worktree, the other describes where the agent session is standing.
 
 | Field | Values | Meaning |
 |---|---|---|
 | `worktree_isolation` | `created`, `already`, `entered`, `recovered`, `failed` | What happened to the branch and its worktree (`## Outline` step 0) |
 | `session` | `worktree`, `primary` | Whether the session's working directory actually moved (`## Outline` step 3) |
+| `run_context` | a path, or `collision` | Where this run's feature identity was pinned (`## Outline` step 4) |
 
 Moving the session needs the `EnterWorktree` tool, which requires interactive approval. In an
 **unattended workflow run there is nobody to approve it**, so the normal result is
@@ -126,6 +127,48 @@ Both are first-priority overrides honored by `.specify/scripts/bash/common.sh`. 
 has to be exported for every `.specify/scripts/**` invocation for the remainder of the run. This is a
 **degraded run**: it stays correct only as long as each later step honors the overrides, and nothing
 enforces that, so a workflow that ships should put it in the pull request description.
+
+### The run context file
+
+As of 2.3.0 the command also writes down *which feature this run owns*, because nothing else does. A
+workflow engine with no step-output templating hands each step nothing but its own args, so every one
+of them re-answers the question from the current branch and `.specify/feature.json` — and immediately
+after a merge both name the **previous** feature. That is how two unattended runs can implement their
+features correctly and then review, QA, screenshot and ship the last feature that merged, with every
+helper script exiting 0 the whole way.
+
+```json
+{
+  "schema_version": "1.0",
+  "run_id": "20260812T184205Z-005-user-auth",
+  "created_at": "2026-08-12T18:42:05Z",
+  "branch": "005-user-auth",
+  "feature_dir": "/Users/me/code/MyProject--005-user-auth/specs/005-user-auth",
+  "worktree_path": "/Users/me/code/MyProject--005-user-auth",
+  "primary_path": "/Users/me/code/MyProject",
+  "base_ref": "origin/main",
+  "worktree_isolation": "created",
+  "session": "primary"
+}
+```
+
+The canonical copy lives at `<worktree>/.specify/run-context.json`. When the session is standing
+somewhere else — the normal unattended case — a second copy goes to
+`<primary>/.specify/run-context.json` pointing at the first, because a step standing in the primary
+has no other way to find the worktree. Paths are absolute for the same reason. Neither copy is
+committable: the script appends the path to `$GIT_COMMON_DIR/info/exclude`, which is local, untracked,
+and shared by every worktree of the repo.
+
+A later step resolves `FEATURE_DIR` from that file — `$SPECIFY_INIT_DIR/.specify/run-context.json`
+first, then the current directory, then the primary checkout — and never from the current branch or
+`.specify/feature.json`. `speckit-addons`' own workflows carry that instruction in every step after
+the first.
+
+**One run per primary checkout.** If a second run's pointer would displace a live one — the other
+run's worktree and branch both still present — the script exits 3 and refuses, because displacing it
+just aims the same drift at that run instead. The second run still gets its own canonical context, and
+the command reports `run_context=collision` naming both branches. It is a loud degradation rather than
+a guarantee; concurrent unattended runs against one primary checkout are not supported.
 
 ### It reports hazards; it does not fix them
 
@@ -164,6 +207,22 @@ bash scripts/bash/create-worktree.sh --json --dry-run 005-user-auth
 # Skip worktree (single-agent mode)
 bash scripts/bash/create-worktree.sh --in-place 005-user-auth
 ```
+
+Pinning the feature identity is a second script, called once the first has reported and the session
+has (or has not) moved:
+
+```bash
+bash scripts/bash/write-run-context.sh \
+  --branch 005-user-auth \
+  --isolation created \
+  --session primary \
+  --worktree-path /Users/me/code/MyProject--005-user-auth \
+  --base-ref origin/main
+```
+
+Exit 0 written, 1 usage or environment error, 3 another live run owns the pointer in this primary
+checkout. `--json` prints the context it wrote; `--force` displaces a live pointer and exists for
+clearing litter by hand, not for winning a race.
 
 ## Environment variables
 

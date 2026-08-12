@@ -15,7 +15,7 @@ The pull request is the review gate. That is the whole design.
 
 | Extension | Why |
 |---|---|
-| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.2.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the `session` field and `EnterWorktree`-refused path added in 2.2.0 (plus the idempotent case detection from 2.1.0) |
+| [`worktrees`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees) **≥ 2.3.0** | The `worktree` step dispatches `speckit.worktrees.create`, and relies on the run context file added in 2.3.0 (plus the `session` field from 2.2.0 and the idempotent case detection from 2.1.0) |
 | [`ship`](https://github.com/arunt14/spec-kit-ship) | The `ship` step dispatches `speckit.ship.run` |
 | [`screenshots`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots) | The two capture steps dispatch `speckit.screenshots.capture` |
 
@@ -105,6 +105,28 @@ Three consequences worth knowing:
 - **One stop is deliberate.** A rebase conflict that cannot be resolved
   trivially leaves the branch alone for you to fix by hand.
 
+### How the steps agree on which feature they are building
+
+The engine has no step-output templating — a step receives its own `args` and
+nothing else, not the worktree step's report and not the previous step's output.
+Left to themselves, every step answers "which feature is this?" from the current
+branch and `.specify/feature.json`, and an unattended run's session is usually
+standing in the *primary* checkout, where right after a merge both name the
+feature that just shipped.
+
+So the `worktree` step writes `.specify/run-context.json` — branch, absolute
+feature directory, worktree path, isolation and session — and every step after
+it carries an explicit instruction to resolve `FEATURE_DIR` from that file,
+never from the branch or `feature.json`, and to **fail loudly** rather than
+adopt a feature the run context does not name. A helper script exiting 0 is not
+evidence it found the right one: `setup-plan.sh` exits 0 on the wrong feature
+and plants a template `plan.md` there. `ship` goes further and refuses to
+commit, push, or open a pull request at all when the run context is missing or
+disagrees.
+
+That instruction is repeated verbatim in every step's `args`. It has to be —
+there is nowhere else to put it.
+
 `send-it` skips review and QA entirely. That is honest rather than waived:
 ship's review and QA pre-flight checks only run when `FEATURE_DIR/reviews/` and
 `FEATURE_DIR/qa/` exist, and with no review or QA step in this workflow they
@@ -120,6 +142,11 @@ never do. If you want those gates, use
   failure called out in the description.
 - **A vague `spec` produces a confident, fast, wrong pull request.** Removing the
   interruptions does not remove the need to know what you want.
+- **One unattended run per primary checkout.** When the session cannot move into
+  the worktree, the run context pointer in the primary checkout is what later
+  steps find, and there is only one of it. A second concurrent run is reported
+  as `run_context=collision` and surfaced in the pull request rather than
+  silently repointing the first — loud, but still not supported.
 
 ## Changelog
 
