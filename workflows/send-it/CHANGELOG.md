@@ -5,6 +5,28 @@ All notable changes to the `send-it` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-12
+
+### Fixed
+- **Unattended runs no longer lose artifacts when a step fails or the run dies mid-pipeline.**
+  The `specify`, `plan`, `tasks`, `screenshots-before`, `implement`, and `screenshots-after`
+  steps committed nothing: the optional git auto-commit hook is `optional: true` and prompts
+  for confirmation — a question an unattended run cannot answer. Each step now carries an
+  ARTIFACT COMMIT block in its `args`: after completing its primary work, run
+  `git -C <worktree_path> add .` and `git -C <worktree_path> commit` with a Conventional
+  Commit message, skipping silently if there is nothing to commit. This is the unattended
+  equivalent of answering YES to the optional git auto-commit hook. The `ship` step already
+  did this; now every earlier step does too.
+
+## [0.5.0] — 2026-08-12
+
+### Fixed
+- **Unattended steps no longer pause for input, and a resumed run no longer regenerates
+  artifacts it already produced.** `specify`, `plan`, `tasks`, and `implement` each now carry
+  an UNATTENDED RUN block (make every judgment call yourself; never pause) and a PRIOR WORK
+  block (if the artifact already exists from a prior run, adopt it without re-running the
+  command).
+
 ## [0.4.0] — 2026-08-12
 
 ### Fixed
@@ -136,6 +158,8 @@ First published release.
   auto-commit the working tree, never block on CI, and stop only on a rebase
   conflict that cannot be resolved trivially.
 
+[0.6.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.6.0
+[0.5.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.5.0
 [0.4.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.4.0
 [0.3.1]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.1
 [0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-v0.3.0

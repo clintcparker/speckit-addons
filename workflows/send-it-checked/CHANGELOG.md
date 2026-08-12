@@ -5,6 +5,41 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-08-12
+
+### Fixed
+- **Unattended runs no longer lose artifacts when a step fails or the run dies mid-pipeline.**
+  Every artifact-producing step (`specify`, `plan`, `tasks`, `screenshots-before`,
+  `implement`, `review`, `qa`, `screenshots-after`) committed nothing: the optional git
+  auto-commit hook is `optional: true` and asks "Commit specification changes?" — a prompt
+  an unattended run cannot answer. A full passing implementation could survive as
+  uncommitted working-tree state in a disposable worktree, one `git worktree prune` away
+  from being gone, which is exactly what caused a prior run's near-duplication of work.
+  Each step now carries an ARTIFACT COMMIT block in its `args`: after completing its primary
+  work, run `git -C <worktree_path> add .` and `git -C <worktree_path> commit` with a
+  Conventional Commit message, skipping silently if there is nothing to commit. This is the
+  unattended equivalent of answering YES to the optional git auto-commit hook. The `ship`
+  step already did this; now every earlier step does too.
+
+## [0.6.0] — 2026-08-12
+
+### Fixed
+- **A resumed run no longer regenerates artifacts it already produced.** Before this fix,
+  `specify`, `plan`, `tasks`, and `implement` re-ran their full command even when the
+  feature directory already contained a completed artifact from a prior run, wasting time and
+  risking overwriting manually edited work. Each step now checks for prior work first: if the
+  artifact exists, adopt it without re-running the command. Only generate from scratch when
+  the artifact is missing or empty.
+
+## [0.5.0] — 2026-08-12
+
+### Fixed
+- **Unattended steps no longer pause for input.** Only the `ship` step's args carried an
+  UNATTENDED RUN declaration; each upstream step could still prompt for confirmation or ask
+  the user to choose between alternatives. Every step now carries an explicit UNATTENDED RUN
+  block: make every judgment call without asking, record the reasoning in the artifact, and
+  flag any open decision for the `ship` step to surface in the PR description.
+
 ## [0.4.0] — 2026-08-12
 
 ### Fixed
@@ -146,6 +181,9 @@ First published release. `send-it` 0.1.0 with two steps inserted before `ship`.
 - `ship` step `args` instructing it to proceed past surviving review/QA
   findings and summarize them under "Known issues" in the pull request.
 
+[0.7.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.7.0
+[0.6.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.6.0
+[0.5.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.5.0
 [0.4.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.4.0
 [0.3.1]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.3.1
 [0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.3.0

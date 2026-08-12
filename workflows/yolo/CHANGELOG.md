@@ -5,6 +5,27 @@ All notable changes to the `yolo` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-08-12
+
+### Fixed
+- **Unattended runs no longer lose artifacts when a step fails or the run dies mid-pipeline.**
+  The `specify`, `plan`, `tasks`, and `implement` steps committed nothing: the optional git
+  auto-commit hook is `optional: true` and prompts for confirmation — a question an
+  unattended run cannot answer. Each step now carries an ARTIFACT COMMIT block in its `args`:
+  after completing its primary work, run `git -C <worktree_path> add .` and
+  `git -C <worktree_path> commit` with a Conventional Commit message, skipping silently if
+  there is nothing to commit. Do not prompt — treat the optional git auto-commit hook as
+  answered YES.
+
+## [0.4.0] — 2026-08-12
+
+### Fixed
+- **Unattended steps no longer pause for input, and a resumed run no longer regenerates
+  artifacts it already produced.** `specify`, `plan`, `tasks`, and `implement` each now carry
+  an UNATTENDED RUN block (make every judgment call yourself; never pause) and a PRIOR WORK
+  block (if the artifact already exists from a prior run, adopt it without re-running the
+  command).
+
 ## [0.3.0] — 2026-08-12
 
 ### Fixed
@@ -116,6 +137,8 @@ with corrections.
   inherited from the built-in `speckit` workflow and referenced by no step, so
   it prompted for a value that changed nothing.
 
+[0.5.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.5.0
+[0.4.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.4.0
 [0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.3.0
 [0.2.1]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.2.1
 [0.2.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.2.0
