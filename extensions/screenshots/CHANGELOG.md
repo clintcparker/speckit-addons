@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.0 (2026-08-13)
+
+### Fixed
+- **A feature without a `plan.md` no longer blocks the whole capture.** Step 1
+  called `check-prerequisites.sh --json`, which validates before it reports and
+  gates on `plan.md`: any feature that bypassed `/speckit-specify` or
+  `/speckit-plan` — a hand-started branch, a run that adopted an existing spec —
+  made the script exit 1 with `ERROR: plan.md not found`, and step 1 had no
+  fallback. It now uses `--paths-only`, which performs the same resolution with
+  no validation and, unlike the plain form, without persisting the override into
+  `.specify/feature.json` on the way past. A screenshot pass needs a feature
+  *directory*, never a plan.
+- **The command no longer takes a helper script's word for which feature this
+  is.** `FEATURE_DIR` is resolved from `$SPECIFY_FEATURE_DIRECTORY` first, then
+  `.specify/run-context.json`, and only then from the script — and when a pinned
+  value exists, the script's answer is compared against it. Unpinned, the script
+  answers from `.specify/feature.json`, which in a primary checkout right after a
+  merge names the feature that just shipped, and it exits 0 on it. A disagreement
+  now stops the command naming both paths, instead of quietly capturing the wrong
+  tree. A script exiting 0 is not evidence it found the right feature.
+
+### Changed
+- Step 3 treats a feature with neither `spec.md` nor `plan.md` as a normal input
+  rather than an error. With nothing to read it judges UI-relevance from
+  `$ARGUMENTS`, the branch name and the profile's `ui_surface`, and when that is
+  not enough it captures the baseline anyway — an unnecessary baseline costs two
+  PNGs, a missing one cannot be recreated once the implementation has landed.
+  Either way the manifest records `"spec": "unavailable"` in `notes`.
+- Two new constraints make both halves explicit: a spec-less feature is a
+  supported input, and a feature the run context does not name is never adopted.
+
 ## 0.2.0 (2026-08-13)
 
 ### Fixed
