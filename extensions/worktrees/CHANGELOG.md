@@ -4,18 +4,29 @@
 
 ### Added
 - **`scripts/bash/acquire-lock.sh`** — takes a lockfile at `<primary>/.specify/run.lock` before
-  anything is created. Stores `run_id`, `pid`, and `timestamp`. A second call with a different
-  `run_id` checks the stored `pid` with `kill -0`: if the process is alive it exits 3 (live
-  concurrent run); if the process is dead it replaces the lock silently (`LOCK_STATUS=stale-replaced`).
-  Pass `--pid "$$"` so the lock is held by the outer shell process rather than the transient
-  subshell that calls the script.
+  anything is created. Stores `run_id`, `pid`, `timestamp`, `epoch` and `ttl_minutes`. A second call
+  with a different `run_id` is refused with exit 3 while the lock is live, and a lock is live when
+  **either** signal says so: `kill -0` finds the recorded process alive, **or** the lock is younger
+  than its TTL. Only when both say otherwise is it taken over silently
+  (`LOCK_STATUS=stale-replaced`).
+
+  **The age check, not the pid, is what holds the guarantee.** An agent harness runs every command
+  in a shell that exits the moment the call returns, so a pid recorded by one call is dead by the
+  next — a pid-only check would have declared the lock stale within milliseconds and waved every
+  concurrent run straight through. The pid is kept as positive evidence only: alive means live,
+  dead means nothing. Pass `--pid "$PPID"` from the calling shell, which is the agent process
+  itself, rather than `"$$"`, which is the shell that is about to exit.
+- **`lock_ttl_minutes` config key** (default 240, `--ttl-minutes` overrides) — how long an
+  unreleased lock keeps blocking. It is the ceiling on how long a run that died without releasing
+  can hold up the next one, so it wants to be longer than the longest run you expect.
 - **`scripts/bash/release-lock.sh`** — removes `<primary>/.specify/run.lock` only when it belongs
-  to this run's `run_id`. A lock held by a different run is left untouched. Explicit release is
-  optional; the PID-based stale detection handles cleanup automatically when the session exits.
+  to this run's `run_id`. A lock held by a different run is left untouched. Each workflow's final
+  step calls it, which is what keeps the TTL a backstop rather than the normal way locks end.
 - **`## Outline` step 2** acquires the lock after the branch name is known but before any worktree
   or run-context file is written. Exit code 3 stops the run immediately — the command does not
   proceed to step 3. The step is skipped when step 0 determined `worktree_isolation=already`
-  (already inside a linked worktree).
+  (already inside a linked worktree). Fixes
+  [#4](https://github.com/clintcparker/speckit-addons/issues/4).
 - **`--run-id` is now passed explicitly** to `write-run-context.sh` (new step 5) so the lock and
   the run context share the same identifier. The caller generates `RUN_ID` at step 2 and threads it
   through to step 5.

@@ -2,9 +2,14 @@
 
 The lockfile is the first line of defence against two concurrent unattended
 runs interfering with each other. The properties that matter: a live lock is
-refused with exit 3; a stale lock (dead PID) is silently replaced; the same
-run can refresh its own lock; an explicit release clears the file only for the
-owning run; and the lock file is never committable.
+refused with exit 3; a lock whose owner is gone *and* whose TTL has expired is
+silently replaced; the same run can refresh its own lock; an explicit release
+clears the file only for the owning run; and the lock file is never committable.
+
+The TTL is not decoration. An agent harness runs each bash call in a shell that
+exits the moment the call returns, so a recorded PID can read as dead within
+milliseconds of being written — PID-only staleness detection would wave every
+concurrent run straight through, which is the bug this guard exists to prevent.
 """
 
 from __future__ import annotations
@@ -127,6 +132,10 @@ def test_lock_file_contains_run_id_pid_timestamp(primary):
     assert "timestamp" in data
     assert data["run_id"] == "20260812T112100Z-005-user-auth"
     assert isinstance(data["pid"], int)
+    # epoch carries the age comparison so no `date` parsing is needed, and
+    # ttl_minutes records the window the lock was taken under.
+    assert isinstance(data["epoch"], int)
+    assert data["ttl_minutes"] == 240
 
 
 def test_live_lock_is_refused_with_exit_3(primary):
@@ -150,8 +159,13 @@ def test_live_lock_is_refused_with_exit_3(primary):
     assert lock_of(primary)["run_id"] == "20260812T112100Z-005-user-auth"
 
 
-def test_stale_lock_is_replaced(primary):
-    """A lock with a dead PID is treated as litter and replaced."""
+def test_dead_pid_within_ttl_is_still_refused(primary):
+    """The regression the TTL exists for.
+
+    The two runs in issue #4 started three minutes apart. Every PID an agent
+    harness can record is dead by then, so a PID-only check would let the second
+    run straight through — which is exactly what it did.
+    """
     stale = dead_pid()
     acquire(
         "--run-id", "20260812T112100Z-005-user-auth",
@@ -163,11 +177,100 @@ def test_stale_lock_is_replaced(primary):
         "--run-id", "20260812T112530Z-006-chat",
         "--pid", live_pid(),
         cwd=primary,
+        check=False,
+    )
+
+    assert result.returncode == 3
+    assert "20260812T112100Z-005-user-auth" in result.stderr
+    assert lock_of(primary)["run_id"] == "20260812T112100Z-005-user-auth"
+
+
+def test_stale_lock_is_replaced(primary):
+    """Dead PID *and* expired TTL: litter, replaced silently."""
+    stale = dead_pid()
+    acquire(
+        "--run-id", "20260812T112100Z-005-user-auth",
+        "--pid", stale,
+        "--ttl-minutes", "0",
+        cwd=primary,
+    )
+
+    result = acquire(
+        "--run-id", "20260812T112530Z-006-chat",
+        "--pid", live_pid(),
+        "--ttl-minutes", "0",
+        cwd=primary,
     )
 
     assert result.returncode == 0
     assert "LOCK_STATUS=stale-replaced" in result.stdout
     assert lock_of(primary)["run_id"] == "20260812T112530Z-006-chat"
+
+
+def test_expired_ttl_alone_does_not_displace_a_live_process(primary):
+    """The two signals are OR-ed: a living owner holds the lock past its TTL."""
+    acquire(
+        "--run-id", "20260812T112100Z-005-user-auth",
+        "--pid", live_pid(),
+        "--ttl-minutes", "0",
+        cwd=primary,
+    )
+
+    result = acquire(
+        "--run-id", "20260812T112530Z-006-chat",
+        "--pid", live_pid(),
+        "--ttl-minutes", "0",
+        cwd=primary,
+        check=False,
+    )
+
+    assert result.returncode == 3
+    assert lock_of(primary)["run_id"] == "20260812T112100Z-005-user-auth"
+
+
+def test_ttl_comes_from_worktree_config(primary):
+    """lock_ttl_minutes in worktree-config.yml sets the window."""
+    config = primary / ".specify" / "extensions" / "worktrees"
+    config.mkdir(parents=True)
+    (config / "worktree-config.yml").write_text(
+        "layout: \"sibling\"\nlock_ttl_minutes: 0\n", encoding="utf-8"
+    )
+
+    stale = dead_pid()
+    acquire("--run-id", "run-a", "--pid", stale, cwd=primary)
+    assert lock_of(primary)["ttl_minutes"] == 0
+
+    result = acquire("--run-id", "run-b", "--pid", live_pid(), cwd=primary)
+    assert result.returncode == 0
+    assert "LOCK_STATUS=stale-replaced" in result.stdout
+
+
+def test_rejects_non_numeric_ttl(primary):
+    result = acquire(
+        "--run-id", "run-a",
+        "--pid", live_pid(),
+        "--ttl-minutes", "forever",
+        cwd=primary,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert not (primary / ".specify" / "run.lock").exists()
+
+
+def test_lock_without_epoch_falls_back_to_the_pid(primary):
+    """A lock written by an older version has no age to compare."""
+    lock = primary / ".specify" / "run.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text(
+        json.dumps({"run_id": "old-run", "pid": int(dead_pid()),
+                    "timestamp": "2026-08-12T11:21:00Z"}),
+        encoding="utf-8",
+    )
+
+    result = acquire("--run-id", "run-b", "--pid", live_pid(), cwd=primary)
+
+    assert result.returncode == 0
+    assert "LOCK_STATUS=stale-replaced" in result.stdout
 
 
 def test_same_run_refreshes_idempotently(primary):

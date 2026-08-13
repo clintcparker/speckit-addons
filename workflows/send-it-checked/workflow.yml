@@ -69,11 +69,18 @@ steps:
         ACQUIRE LOCK — after determining the branch name (Outline step 1) and before
         creating anything (step 3), generate a run_id (format: <utc-timestamp>-<branch>,
         e.g. 20260812T112100Z-005-user-auth) and call acquire-lock.sh --run-id "$RUN_ID"
-        --pid "$$ " (Outline step 2). Exit code 3 means a live concurrent run holds the
-        lock: report the conflict naming the existing run_id and pid, and STOP — do not
-        create the worktree, do not pass --force. Skip this step only when step 0
-        determined worktree_isolation=already. Pass $RUN_ID to write-run-context.sh via
-        --run-id in step 5 so the lock and run context share the same identifier.
+        --pid "$PPID" (Outline step 2). Pass $PPID, never $$: every command here runs in a
+        shell that exits as soon as it returns, so $$ names a process that is already dead
+        by the next step and a lock stamped with it looks stale to every later run. $PPID
+        is the agent process, which lives for the whole run.
+
+        Exit code 3 means a live concurrent run holds the lock — either its process is
+        alive or its lock is younger than lock_ttl_minutes: report the conflict naming the
+        existing run_id and pid, and STOP — do not create the worktree, do not pass
+        --force. Skip this step only when step 0 determined worktree_isolation=already.
+        Pass $RUN_ID to write-run-context.sh via --run-id in step 5 so the lock and run
+        context share the same identifier; that file is where the step which releases the
+        lock at the end of this workflow reads it from.
 
         Ensure this session is inside a feature worktree before any later step touches
         the repo. Follow the command's Outline step 0 case detection: no-op if already
@@ -576,3 +583,25 @@ steps:
         instead, add the single line "No UI changes — screenshots skipped."
         Verify the screenshot commits are actually part of the pushed head
         before linking.
+
+        RUN ID STAMP — end the pull request description with the HTML comment
+        `<!-- speckit-run-id: <run_id> -->`, taking run_id from run-context.json. It
+        renders as nothing and it is what makes the next check possible.
+
+        Before rewriting the body of a pull request that ALREADY EXISTS for this branch,
+        read the current body first. If it carries a `speckit-run-id` marker that is not
+        yours and sorts LATER than yours — run ids begin with a UTC timestamp, so a plain
+        string comparison is a time comparison — a newer run has already described this
+        branch: do NOT overwrite it. Leave the body alone, post your summary as a pull
+        request COMMENT instead, and say in the run summary that a newer run owns the
+        description. An older marker, no marker, or your own is yours to rewrite. The lock
+        should have made this impossible; this is the backstop for when it did not, and
+        losing a description is not worth the tidiness.
+
+        RELEASE THE LOCK — as the FINAL action of this step, once the pull request is open
+        (or once this step has stopped for any reason, including a rebase conflict), run
+        `bash .specify/extensions/worktrees/scripts/bash/release-lock.sh --run-id "<run_id
+        from run-context.json>"`. It removes the lock only while it still belongs to that
+        run id, so it can never free somebody else's. The lock expires by itself after
+        lock_ttl_minutes, so skipping this corrupts nothing — it just blocks the next run
+        against this checkout for up to that long. Report the RELEASE_STATUS.

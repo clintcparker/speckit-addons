@@ -103,24 +103,39 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$BRANCH_NAME"
    bash .specify/extensions/worktrees/scripts/bash/acquire-lock.sh \
      --run-id "$RUN_ID" \
-     --pid "$$" \
+     --pid "$PPID" \
      [--json]
    ```
 
-   The lockfile at `<primary>/.specify/run.lock` records `run_id`, `pid`, and `timestamp`. Stale-lock
-   detection uses `kill -0` against the recorded `pid`: if that process is gone the lock is taken over
-   silently (`LOCK_STATUS=stale-replaced`), not refused. Pass `--pid "$$"` so the lock is associated
-   with the outer shell process rather than this transient subshell.
+   The lockfile at `<primary>/.specify/run.lock` records `run_id`, `pid`, `timestamp`, `epoch` and
+   `ttl_minutes`. A held lock counts as **live** — and a second run is refused — when *either* the
+   recorded process is still alive *or* the lock is younger than its TTL (`lock_ttl_minutes`, default
+   240). Only when both say otherwise is it taken over silently (`LOCK_STATUS=stale-replaced`).
 
-   **Exit code 3** means a live concurrent run holds the lock — its process is still alive. Report the
-   conflict (the existing `run_id` and `pid`) and stop. Do not proceed to step 3, and do not pass
-   `--force`. `--force` is for operator cleanup of a genuinely dead lock, not for resolving a race.
+   **`--pid "$PPID"`, not `"$$"`.** Every command an agent runs gets a shell that exits the moment the
+   call returns, so `$$` names a process that is dead before the next step starts — a lock stamped
+   with it reads as stale to every later run, and the guard passes everything through. `$PPID`
+   *from the calling shell* is the agent process itself, which lives for the whole run. Even that is
+   only a hint: the age check is what actually holds the line, which is why a workflow's final step
+   should release the lock rather than leave it to expire —
+
+   ```bash
+   bash .specify/extensions/worktrees/scripts/bash/release-lock.sh --run-id "$RUN_ID"
+   ```
+
+   — which removes the file only when it still belongs to that `run_id`, and leaves anyone else's
+   alone.
+
+   **Exit code 3** means a live concurrent run holds the lock. Report the conflict (the existing
+   `run_id` and `pid`) and stop. Do not proceed to step 3, and do not pass `--force`. `--force` is for
+   an operator clearing a lock they know is dead, never for this command resolving a race.
 
    **Skip this step** only when step 0 determined `worktree_isolation=already` (the session is already
    inside a linked worktree). An already-isolated session does not compete for the primary's lock.
 
    Pass `$RUN_ID` to `write-run-context.sh` via `--run-id` in step 5 so the lock and the run context
-   share the same identifier.
+   share the same identifier. That is also how a later step — or the last step of a workflow, which
+   has no memory of this one — finds the run id to release: it is `run_id` in `run-context.json`.
 
 3. **Invoke the script**:
    Run the deterministic bash script shipped with this extension:

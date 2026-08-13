@@ -16,6 +16,15 @@ this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   first run's working tree. The lock and the run context now share the same `run_id`
   (passed explicitly via `--run-id "$RUN_ID"` to `write-run-context.sh`).
   Requires `worktrees` ≥ 2.4.0.
+- **A dead PID is not evidence a run ended, so the lock does not rely on one.** An agent
+  harness runs each command in a shell that exits as soon as the call returns; a lock
+  stamped with that shell's `$$` reads as stale milliseconds later, which would have let
+  every concurrent run through. The lock is held while its process is alive **or** while it
+  is younger than `lock_ttl_minutes` (default 240), and the step passes `--pid "$PPID"` —
+  the agent process — rather than `$$`.
+- **The `implement` step releases the run lock as its final action**, so the next run
+  against this checkout is not blocked until the lock's TTL expires. `release-lock.sh` frees
+  the lock only while this run still owns it.
 
 ## [0.5.0] — 2026-08-12
 

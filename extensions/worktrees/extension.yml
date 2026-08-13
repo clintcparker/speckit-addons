@@ -53,3 +53,6 @@ config:
     auto_create: true
     sibling_pattern: "{{repo}}--{{branch}}"
     dotworktrees_dir: ".worktrees"
+    # Read as the base layer beneath the deployed worktree-config.yml, which can
+    # legitimately be absent — so the default has to be correct in both places.
+    lock_ttl_minutes: 240
