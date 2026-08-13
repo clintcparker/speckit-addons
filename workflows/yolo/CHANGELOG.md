@@ -5,6 +5,23 @@ All notable changes to the `yolo` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-13
+
+### Fixed
+- **Artifacts a step writes under the feature directory are now made trackable once,
+  instead of being force-added by every step that touches them.** Repos routinely ignore
+  `specs/*/screenshots/` and `specs/*/releases/` for unrelated reasons, and the workflow
+  needs their contents to reach the pushed head. Every step that met the conflict reached
+  for `git add -f` independently — five separate times across two observed runs — which
+  stages one commit and leaves the next step, the next run and the reviewer's checkout
+  facing exactly the same rule. Every step now carries an ARTIFACT VISIBILITY block beside
+  its WORKTREE DISCIPLINE block: run `git -C <tree> check-ignore -v` against `feature_dir`
+  and the subdirectories the step wrote; when a rule matches, append `!<subdir>/` to
+  `<feature_dir>/.gitignore` and commit it, because a `.gitignore` inside the feature
+  directory outranks the repo root's and a plain `git add` works from then on. `git add -f`
+  is now forbidden outright rather than left as the obvious workaround. The repo's own
+  ignore rules are never edited.
+
 ## [0.7.0] — 2026-08-13
 
 ### Fixed
@@ -188,6 +205,9 @@ with corrections.
   inherited from the built-in `speckit` workflow and referenced by no step, so
   it prompted for a value that changed nothing.
 
+[0.8.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.8.0
+[0.7.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.7.0
+[0.6.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.6.0
 [0.5.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.5.0
 [0.4.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.4.0
 [0.3.0]: https://github.com/clintcparker/speckit-addons/releases/tag/yolo-v0.3.0

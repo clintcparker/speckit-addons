@@ -8,13 +8,13 @@
       "name": "UI Screenshots",
       "description": "Before/after UI screenshots for a feature, committed to the branch for embedding in the pull request",
       "author": "clintcparker",
-      "version": "0.1.0",
-      "download_url": "https://github.com/clintcparker/speckit-addons/releases/download/ext-screenshots-v0.1.0/screenshots-0.1.0.zip",
-      "sha256": "4b72e3f29bb41bc6b9cb593bb06502b5977607ef5f46f494e2a44a8675db9f75",
+      "version": "0.2.0",
+      "download_url": "https://github.com/clintcparker/speckit-addons/releases/download/ext-screenshots-v0.2.0/screenshots-0.2.0.zip",
+      "sha256": "d2931c9ac1375372f6d2095474c992fdf35fdb329ea98291d6ac1ba3314a97a8",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots",
-      "documentation": "https://github.com/clintcparker/speckit-addons/blob/ext-screenshots-v0.1.0/extensions/screenshots/README.md",
-      "changelog": "https://github.com/clintcparker/speckit-addons/blob/ext-screenshots-v0.1.0/extensions/screenshots/CHANGELOG.md",
+      "documentation": "https://github.com/clintcparker/speckit-addons/blob/ext-screenshots-v0.2.0/extensions/screenshots/README.md",
+      "changelog": "https://github.com/clintcparker/speckit-addons/blob/ext-screenshots-v0.2.0/extensions/screenshots/CHANGELOG.md",
       "license": "MIT",
       "category": "process",
       "effect": "read-write",
@@ -33,7 +33,7 @@
       ],
       "verified": false,
       "created_at": "2026-08-05T00:00:00Z",
-      "updated_at": "2026-08-05T00:00:00Z"
+      "updated_at": "2026-08-13T00:00:00Z"
     },
     "worktrees": {
       "id": "worktrees",

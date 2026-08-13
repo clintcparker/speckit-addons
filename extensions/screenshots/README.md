@@ -39,6 +39,21 @@ Two filled-in profiles are in [`examples/`](examples/): an ASP.NET Razor Pages
 app captured with Playwright, and a Tauri desktop app captured with AppleScript
 and `screencapture`.
 
+## Tracked, not force-added
+
+The pull request body links these images by path, so they have to be *tracked* —
+an image git considers ignored is never in the pushed head and its URL 404s for
+every reviewer. Plenty of repos ignore `screenshots/` or `specs/*/screenshots/`
+for unrelated reasons, and the workaround people reach for, `git add -f`, fixes
+one commit and leaves the next step with the same conflict.
+
+Step 2 of the command resolves it once instead: if `git check-ignore` reports a
+rule against `FEATURE_DIR/screenshots/`, it appends `!screenshots/` to
+`FEATURE_DIR/.gitignore` and commits that file. A `.gitignore` inside the feature
+directory outranks the repo root's, so plain `git add` works from then on — for
+the after pass, for `speckit.ship.run`, and in the reviewer's checkout. The
+repo's own ignore rule is left exactly as it was.
+
 ## Manifest
 
 `FEATURE_DIR/screenshots/manifest.json`:
