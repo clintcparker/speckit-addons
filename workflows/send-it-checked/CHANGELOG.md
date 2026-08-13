@@ -5,6 +5,18 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-13
+
+### Fixed
+- **Two concurrent unattended runs against the same primary checkout can no longer race.**
+  The `worktree` step now acquires a per-primary-checkout lock (`acquire-lock.sh`) after
+  determining the branch name (Outline step 1) and before creating anything (Outline step 3).
+  A second run whose lock call returns exit code 3 stops immediately — it reports the
+  existing `run_id` and `pid` and does not proceed to create a worktree, run review, QA,
+  or corrupt the first run's working tree. The lock and the run context now share the same
+  `run_id` (passed explicitly via `--run-id "$RUN_ID"` to `write-run-context.sh`).
+  Requires `worktrees` ≥ 2.4.0.
+
 ## [0.7.0] — 2026-08-12
 
 ### Fixed

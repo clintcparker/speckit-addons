@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it-checked"
   name: "Spec to PR, unattended, with review and QA"
-  version: "0.7.0"
+  version: "0.8.0"
   author: "clintcparker"
   description: "send-it plus staff review and QA, each with one fix-and-re-run pass, before shipping — with before/after UI screenshots. Requires the `worktrees`, `screenshots`, `ship`, `staff-review` and `qa` extensions."
 
@@ -66,6 +66,15 @@ steps:
       args: >-
         UNATTENDED RUN — no user is present; never prompt and never ask which layout.
 
+        ACQUIRE LOCK — after determining the branch name (Outline step 1) and before
+        creating anything (step 3), generate a run_id (format: <utc-timestamp>-<branch>,
+        e.g. 20260812T112100Z-005-user-auth) and call acquire-lock.sh --run-id "$RUN_ID"
+        --pid "$$ " (Outline step 2). Exit code 3 means a live concurrent run holds the
+        lock: report the conflict naming the existing run_id and pid, and STOP — do not
+        create the worktree, do not pass --force. Skip this step only when step 0
+        determined worktree_isolation=already. Pass $RUN_ID to write-run-context.sh via
+        --run-id in step 5 so the lock and run context share the same identifier.
+
         Ensure this session is inside a feature worktree before any later step touches
         the repo. Follow the command's Outline step 0 case detection: no-op if already
         isolated; use the existing BRANCH NAME (never --from-description) if the primary
@@ -84,7 +93,7 @@ steps:
         the call to be refused and expect session=primary. That is the normal outcome of
         an unattended run, not a failure — but do NOT let the spec land in the primary
         checkout because of it. Emit SPECIFY_INIT_DIR and SPECIFY_FEATURE_DIRECTORY in the
-        fields block exactly as Outline step 3 requires, and export SPECIFY_INIT_DIR for
+        fields block exactly as Outline step 4 requires, and export SPECIFY_INIT_DIR for
         every .specify/scripts/** invocation from here to the end of the run.
 
         REPORT, DO NOT REMEDY. Creating the branch inside its worktree is this step's whole
@@ -94,12 +103,13 @@ steps:
         close the gap, and no copying untracked files across. "Never prompt" is not licence
         to act unilaterally.
 
-        PIN THE FEATURE — take Outline step 4 on every path out of this command, including
-        worktree_isolation=failed: write the run context with write-run-context.sh and
-        report run_context=<path> in the fields block. Every later step of this workflow
-        resolves FEATURE_DIR from that file and has nothing else to go on. If the script
-        exits 3, another unattended run owns the pointer in this primary checkout — report
-        run_context=collision naming both branches, and do NOT pass --force.
+        PIN THE FEATURE — take Outline step 5 on every path out of this command, including
+        worktree_isolation=failed: write the run context with write-run-context.sh
+        --run-id "$RUN_ID" and report run_context=<path> in the fields block. Every later
+        step of this workflow resolves FEATURE_DIR from that file and has nothing else to
+        go on. If the script exits 3, another unattended run owns the pointer in this
+        primary checkout — report run_context=collision naming both branches, and do NOT
+        pass --force.
 
         Carry worktree_isolation, session AND run_context forward, so the ship step can
         surface a recovered, failed, degraded, or collided outcome in the pull request
@@ -515,7 +525,7 @@ steps:
         somebody else's feature. Otherwise no mention is needed.
 
         Also carry forward anything the worktree step reported under Outline
-        step 5 — a base ref behind its local counterpart, or feature inputs that
+        step 6 — a base ref behind its local counterpart, or feature inputs that
         are gitignored and therefore absent from the worktree. Both change how
         this pull request should be read: the first means the branch may not
         contain commits the reviewer has locally, the second means the feature

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.4.0 (2026-08-13)
+
+### Added
+- **`scripts/bash/acquire-lock.sh`** — takes a lockfile at `<primary>/.specify/run.lock` before
+  anything is created. Stores `run_id`, `pid`, and `timestamp`. A second call with a different
+  `run_id` checks the stored `pid` with `kill -0`: if the process is alive it exits 3 (live
+  concurrent run); if the process is dead it replaces the lock silently (`LOCK_STATUS=stale-replaced`).
+  Pass `--pid "$$"` so the lock is held by the outer shell process rather than the transient
+  subshell that calls the script.
+- **`scripts/bash/release-lock.sh`** — removes `<primary>/.specify/run.lock` only when it belongs
+  to this run's `run_id`. A lock held by a different run is left untouched. Explicit release is
+  optional; the PID-based stale detection handles cleanup automatically when the session exits.
+- **`## Outline` step 2** acquires the lock after the branch name is known but before any worktree
+  or run-context file is written. Exit code 3 stops the run immediately — the command does not
+  proceed to step 3. The step is skipped when step 0 determined `worktree_isolation=already`
+  (already inside a linked worktree).
+- **`--run-id` is now passed explicitly** to `write-run-context.sh` (new step 5) so the lock and
+  the run context share the same identifier. The caller generates `RUN_ID` at step 2 and threads it
+  through to step 5.
+- The lock file is excluded from every commit (appended to `$GIT_COMMON_DIR/info/exclude`, the same
+  mechanism as `run-context.json`).
+
+### Changed
+- `## Outline` steps 2–7 renumbered to 3–8 to make room for the new lock step. All
+  cross-references inside the command and in the `send-it`, `send-it-checked` and `yolo`
+  workflows were updated with them.
+- The **`## Rules`** section gains two updated entries: "Acquire the lock before creating anything"
+  (step 2, with the same --force restriction as the run-context pointer) and "Never displace another
+  run's pointer" now names both the lock script (step 2) and the run-context writer (step 5).
+
 ## 2.3.0 (2026-08-12)
 
 ### Added
