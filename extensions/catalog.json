@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-12T00:00:00Z",
+  "updated_at": "2026-08-13T00:00:00Z",
   "catalog_url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/main/extensions/catalog.json",
   "extensions": {
     "screenshots": {
@@ -40,13 +40,13 @@
       "name": "Worktrees",
       "description": "Default-on worktree isolation for parallel agents — worktree-first flow, sibling or nested layout",
       "author": "clintcparker",
-      "version": "2.4.0",
-      "download_url": "https://github.com/clintcparker/speckit-addons/releases/download/ext-worktrees-v2.4.0/worktrees-2.4.0.zip",
-      "sha256": "b573f14eb99ab5999db928f43ff8b1eadef16b3acf6e9869a3f49ea132fe44a0",
+      "version": "2.5.0",
+      "download_url": "https://github.com/clintcparker/speckit-addons/releases/download/ext-worktrees-v2.5.0/worktrees-2.5.0.zip",
+      "sha256": "8a4a93a47f69cd36fcd17a90ab2e8fa12039e10001fc61f7c427ac354564ec95",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/extensions/worktrees",
-      "documentation": "https://github.com/clintcparker/speckit-addons/blob/ext-worktrees-v2.4.0/extensions/worktrees/README.md",
-      "changelog": "https://github.com/clintcparker/speckit-addons/blob/ext-worktrees-v2.4.0/extensions/worktrees/CHANGELOG.md",
+      "documentation": "https://github.com/clintcparker/speckit-addons/blob/ext-worktrees-v2.5.0/extensions/worktrees/README.md",
+      "changelog": "https://github.com/clintcparker/speckit-addons/blob/ext-worktrees-v2.5.0/extensions/worktrees/CHANGELOG.md",
       "license": "MIT",
       "category": "process",
       "effect": "read-write",
@@ -66,7 +66,7 @@
       ],
       "verified": false,
       "created_at": "2026-07-30T00:00:00Z",
-      "updated_at": "2026-08-12T00:00:00Z"
+      "updated_at": "2026-08-13T00:00:00Z"
     },
     "git": {
       "id": "git",

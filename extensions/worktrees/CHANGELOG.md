@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.5.0 (2026-08-13)
+
+### Changed
+- **`## Outline` step 4 no longer presents the path overrides as isolation.** `SPECIFY_INIT_DIR`
+  and `SPECIFY_FEATURE_DIRECTORY` are honored by `.specify/scripts/**` and by nothing else, so
+  under `session=primary` — the normal unattended outcome, since `EnterWorktree` needs an approval
+  nobody is there to give — every plain `git`, `gh`, build and test command a later step runs still
+  resolves against the primary checkout. Runs were observed committing to `main` and opening pull
+  requests from it while exporting the overrides correctly the whole way. The step now says so
+  plainly and states the invariant later steps inherit: all writes happen in this run's worktree on
+  this run's branch, and a step about to write in the primary checkout has failed rather than found
+  a workaround. Fixes [#5](https://github.com/clintcparker/speckit-addons/issues/5).
+- **The fields block gains `worktree_path=<path>`** alongside the two overrides whenever
+  `session=primary`, so a later step has the tree to aim `git -C <path>` (or `cd <path>`) at without
+  having to parse it out of `SPECIFY_INIT_DIR`.
+- **`## Rules`** gains "The overrides isolate only what reads them", and the `session` field's
+  description in `## Outline` step 8 lists the new line.
+
 ## 2.4.0 (2026-08-13)
 
 ### Added

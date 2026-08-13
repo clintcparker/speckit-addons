@@ -45,15 +45,15 @@ is not installability. That gap is the entire reason
 
 | Add-on | Version | Source | What it contributes |
 |---|---|---|---|
-| [`worktrees`](../extensions/worktrees/) | 2.4.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree; since 2.3.0 it also writes the run context file every later step reads its feature identity from; since 2.4.0 it takes the run lock that keeps two runs off one primary checkout |
+| [`worktrees`](../extensions/worktrees/) | 2.5.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree; since 2.3.0 it also writes the run context file every later step reads its feature identity from; since 2.4.0 it takes the run lock that keeps two runs off one primary checkout; and since 2.5.0 it reports `worktree_path` and says plainly that the path overrides isolate only `.specify/scripts/**` |
 | [`git`](../extensions/git/) | 1.1.0 | hosted here | Feature-branch naming and numbering. The worktrees hook delegates to its `create-new-feature-branch.sh` to derive the branch name |
 | [`screenshots`](../extensions/screenshots/) | 0.1.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
 | `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) | `speckit.ship.run` — pre-flight, rebase, push, PR creation |
 | `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) | `speckit.staff-review.run` — review report into `FEATURE_DIR/reviews/` |
 | `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) | `speckit.qa.run` — QA report into `FEATURE_DIR/qa/` |
-| [`send-it`](../workflows/send-it/) | 0.7.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
-| [`send-it-checked`](../workflows/send-it-checked/) | 0.8.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
-| [`yolo`](../workflows/yolo/) | 0.6.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
+| [`send-it`](../workflows/send-it/) | 0.8.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
+| [`send-it-checked`](../workflows/send-it-checked/) | 0.9.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`yolo`](../workflows/yolo/) | 0.7.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
 
 The three first-party extensions are published from this repo as release assets
 with a `sha256` in the catalog. The three third-party ones are pinned pointers at
@@ -114,13 +114,41 @@ control those tags.
    ```text
    SPECIFY_INIT_DIR=<worktree path>
    SPECIFY_FEATURE_DIRECTORY=<worktree path>/specs/<feature-dir>
+   worktree_path=<worktree path>
    ```
 
-   and each step honors them. Both are first-priority overrides in
+   and each step honors them. The first two are first-priority overrides in
    `.specify/scripts/bash/common.sh`. This is a **degraded run**: nothing enforces that
    the overrides are honored across seven remaining steps, which is exactly why `ship`
    puts `session=primary` in the pull request description rather than letting it die in
    a transcript.
+
+   **And the overrides are only half the isolation.** Nothing outside
+   `.specify/scripts/**` reads them — plain `git`, `gh`, build and test commands resolve
+   against the *current working directory*, which under `session=primary` is the primary
+   checkout. That is not theoretical either: a run's `screenshots-before` step committed
+   straight to `main`, its `review` step left its fixes as uncommitted state on `main`,
+   and `ship` then cut a branch at `main`'s tip to avoid a `main → main` pull request —
+   moving the user's checkout under them and carrying unrelated `main` commits into the
+   PR — while every step exported `SPECIFY_INIT_DIR` correctly the whole way.
+
+   So `worktrees` 2.5.0 also reports `worktree_path`, and every step of all three
+   workflows carries a **WORKTREE DISCIPLINE** block next to its FEATURE IDENTITY block:
+   direct every command at the run's tree explicitly (`git -C <tree> …`, or `cd <tree>`
+   first), where `<tree>` is the run context's `worktree_path` — or its `primary_path`
+   when the run has no worktree at all; check `git -C <tree> rev-parse --show-toplevel`
+   and `git -C <tree> branch --show-current` against the run context before the first
+   write; and treat *being about to write in the primary checkout* as a failed step
+   rather than a workaround. `ship` additionally pushes with `git -C <tree> push` and
+   passes `--head` and `--base` to `gh pr create` explicitly, so no pull request is ever
+   inferred from the branch the primary happens to be standing on.
+
+   The other way to close the gap is to stop the run standing in the primary at all:
+   pre-approve `EnterWorktree` in the harness's permission allowlist, and the session
+   really does move (`session=worktree`), which makes the working directory right and
+   the overrides and the discipline block redundant. That is a harness-side setting, not
+   something a workflow or extension here can declare, which is why the discipline block
+   is the fix that ships in this repo.
 
    When the tool *is* approved — an interactive run — the session really does move,
    `session=worktree`, the working directory carries forward, and the overrides are
@@ -391,7 +419,15 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
   in the opposite direction.
 - **An unattended run cannot enter its own worktree.** `EnterWorktree` needs
   interactive approval. Expect `session=primary` and a run that stays correct only
-  because every step honors `SPECIFY_INIT_DIR`. See "The session model" above.
+  because every step honors `SPECIFY_INIT_DIR` *and* aims its own commands at the
+  worktree. See "The session model" above.
+- **A path override is not a working directory.** `SPECIFY_INIT_DIR` and
+  `SPECIFY_FEATURE_DIRECTORY` are read by `.specify/scripts/**` and by nothing else, so
+  every plain `git`, `gh`, build or test command a step runs lands wherever the session
+  is standing — the primary checkout, in an unattended run. Isolation by path override
+  covers only the tooling that reads the override; everything else needs `git -C <tree>`
+  or a `cd`. This is what the WORKTREE DISCIPLINE block in every workflow step is for,
+  and pre-approving `EnterWorktree` is the alternative that removes the need for it.
 - **A PID is not a run.** Every command an agent runs gets a shell that exits when
   the call returns, so nothing that outlives a single tool call can be identified
   by the PID that wrote it. The run lock records one, but only as positive

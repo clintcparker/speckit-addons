@@ -123,12 +123,25 @@ primary checkout:
 session=primary
 SPECIFY_INIT_DIR=/path/to/worktree
 SPECIFY_FEATURE_DIRECTORY=/path/to/worktree/specs/<feature-dir>
+worktree_path=/path/to/worktree
 ```
 
-Both are first-priority overrides honored by `.specify/scripts/bash/common.sh`. `SPECIFY_INIT_DIR`
-has to be exported for every `.specify/scripts/**` invocation for the remainder of the run. This is a
-**degraded run**: it stays correct only as long as each later step honors the overrides, and nothing
-enforces that, so a workflow that ships should put it in the pull request description.
+The first two are first-priority overrides honored by `.specify/scripts/bash/common.sh`.
+`SPECIFY_INIT_DIR` has to be exported for every `.specify/scripts/**` invocation for the remainder of
+the run.
+
+**The overrides are not isolation.** Nothing outside `.specify/scripts/**` reads them: plain `git`,
+`gh`, build and test commands resolve against the *current working directory*, which under
+`session=primary` is the primary checkout. A later step that runs a bare `git commit` commits onto
+whatever branch the primary is standing on no matter how faithfully it exported `SPECIFY_INIT_DIR`.
+That is why 2.5.0 also reports `worktree_path`: every later step has to point its own commands at
+that path (`git -C <path> …`, or `cd <path>` first), and the invariant it inherits is that **all
+writes happen in this run's worktree on this run's branch — a step about to write in the primary
+checkout has failed rather than found a workaround**.
+
+So `session=primary` is a **degraded run**: it stays correct only as long as each later step both
+honors the overrides and directs its own commands at the worktree, and nothing enforces either. A
+workflow that ships should put it in the pull request description.
 
 ### The run context file
 

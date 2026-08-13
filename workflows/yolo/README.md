@@ -170,6 +170,14 @@ you add one, consider putting a `gate` step in front of it.
 
 - **No review gates.** That is the entire point, and it is a real trade. Use a
   branch.
+- **Isolation by path override covers only `.specify` scripts.** `SPECIFY_INIT_DIR`
+  and `SPECIFY_FEATURE_DIRECTORY` are read by `.specify/scripts/**` and by nothing
+  else, so a plain `git`, `gh`, build or test command lands wherever the session is
+  standing — the primary checkout, in an unattended run where `EnterWorktree` could not
+  be approved. Every step therefore carries a WORKTREE DISCIPLINE block telling it to
+  aim its own commands at the run's tree (`git -C <tree> …`) and to treat writing in the
+  primary as a failed step. Pre-approving `EnterWorktree` in your agent's permission
+  allowlist removes the need for that discipline by moving the session for real.
 - **Not a substitute for knowing what you want.** YOLO removes the interruptions,
   not the need for a clear spec. A vague `spec` input produces a confident,
   fast, wrong implementation.

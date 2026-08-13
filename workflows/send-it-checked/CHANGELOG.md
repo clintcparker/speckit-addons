@@ -5,6 +5,43 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-08-13
+
+### Fixed
+- **Worktree isolation now covers plain `git`, `gh`, build and test commands, not just
+  `.specify` scripts.** `SPECIFY_INIT_DIR` and `SPECIFY_FEATURE_DIRECTORY` are read only by
+  `.specify/scripts/**`; everything else a step runs resolves against the current working
+  directory, which in an unattended run is the primary checkout — `EnterWorktree` needs an
+  interactive approval nobody is there to give, so `session=primary` is the normal outcome.
+  Steps therefore committed to whatever branch the primary was standing on, `review` left
+  its fixes as uncommitted state there, and `ship` opened its pull requests from it. Every
+  step now carries a WORKTREE DISCIPLINE block: direct every command at the run's tree explicitly
+  (`git -C <tree> …` or `cd <tree>` first), where `<tree>` is the run context's
+  `worktree_path`, or its `primary_path` when the run has no worktree; verify
+  `git -C <tree> rev-parse --show-toplevel` and `git -C <tree> branch --show-current` against
+  the run context before the first write; and treat being about to write in the primary
+  checkout as a failed step rather than a workaround.
+- **The ARTIFACT COMMIT blocks no longer break when the run has no worktree.** They ran
+  `git -C <worktree_path>`, which is an empty argument on the `worktree_isolation=failed`
+  path; they now use the `<tree>` the WORKTREE DISCIPLINE block resolves, which falls back to
+  the primary checkout in exactly that case.
+- **The lock release no longer depends on where the step is standing.** It invoked
+  `release-lock.sh` by a repo-relative path, which resolves against the working directory
+  — now that steps are told to work inside the worktree, that path could miss. The final
+  step now invokes it as `<primary_path>/.specify/extensions/...`, taking `primary_path`
+  from the run context; the lock itself has always lived in the primary checkout and the
+  script resolves it from either tree.
+- **The `worktree` step reports the invariant it establishes.** It now emits
+  `worktree_path=<path>` in its fields block alongside the two overrides, and states that the
+  overrides are honored only by `.specify/scripts/**` — so a `session=primary` report is no
+  longer read as "isolated, as long as the overrides hold".
+- **The `ship` step can no longer open a pull request for a branch this run did not build.**
+  It now pushes with `git -C <tree> push` and passes `--head <branch>` and `--base <target>`
+  to `gh pr create` explicitly rather than letting the head be inferred from the primary's
+  current branch, and it stops instead of cutting a new branch at the primary's tip to avoid
+  a `base == head` pull request — a workaround that moved the user's checkout under them and
+  carried unrelated commits from the primary into the pull request.
+
 ## [0.8.0] — 2026-08-13
 
 ### Fixed

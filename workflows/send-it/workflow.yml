@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it"
   name: "Spec to PR, unattended"
-  version: "0.7.0"
+  version: "0.8.0"
   author: "clintcparker"
   description: "worktree → specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `worktrees`, `screenshots` and `ship` extensions."
 
@@ -56,11 +56,15 @@ steps:
   # and in an unattended run it is usually NOT the worktree. Moving the session needs the
   # EnterWorktree tool, which requires interactive approval that nobody is here to give,
   # so the normal outcome is worktree_isolation=created with session=primary: the branch
-  # lives in its worktree, the session's working directory is still the primary checkout,
-  # and correctness rides on the SPECIFY_INIT_DIR / SPECIFY_FEATURE_DIRECTORY overrides
-  # this step emits. Every later step must honor them; nothing enforces that, which is why
-  # ship surfaces session=primary in the pull request description. Do not add a step that
-  # assumes the primary checkout is on the feature branch either.
+  # lives in its worktree and the session's working directory is still the primary
+  # checkout. The SPECIFY_INIT_DIR / SPECIFY_FEATURE_DIRECTORY overrides this step emits
+  # close only half of that gap. `.specify/scripts/**` reads them; nothing else does, so
+  # every plain git, gh, build and test command a later step runs still resolves against
+  # the primary unless that step directs it at the worktree by hand — which is what the
+  # WORKTREE DISCIPLINE block in every step below exists to make it do (issue #5).
+  # Nothing enforces either half, which is why ship surfaces session=primary in the pull
+  # request description. Do not add a step that assumes the primary checkout is on the
+  # feature branch either.
   - id: worktree
     command: speckit.worktrees.create
     integration: "{{ inputs.integration }}"
@@ -112,6 +116,16 @@ steps:
         close the gap, and no copying untracked files across. "Never prompt" is not licence
         to act unilaterally.
 
+        WORKTREE DISCIPLINE — the overrides are not isolation, and the report must say
+        so. SPECIFY_INIT_DIR and SPECIFY_FEATURE_DIRECTORY are honored only by
+        `.specify/scripts/**`; with session=primary every plain `git`, `gh`, build and
+        test command a later step runs still resolves against the primary checkout unless
+        that step directs it at the worktree (`git -C <path>`, or `cd <path>` first).
+        Report the worktree path in the fields block as `worktree_path=<path>` alongside
+        the two overrides, and state the invariant every later step inherits: all writes
+        happen in this run's worktree on this run's branch, and a step about to write in
+        the primary checkout has failed rather than found a workaround.
+
         PIN THE FEATURE — take Outline step 5 on every path out of this command, including
         worktree_isolation=failed: write the run context with write-run-context.sh
         --run-id "$RUN_ID" and report run_context=<path> in the fields block. Every later
@@ -145,6 +159,27 @@ steps:
         SPECIFY_FEATURE_DIRECTORY=<feature_dir> for every `.specify/scripts/**` invocation
         this step makes.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
         PRIOR WORK — before running the spec command, check whether `feature_dir` already
         exists and contains a spec document. If it does, this is a resumed run: adopt the
         existing spec without regenerating it, note the adoption in the step output, and
@@ -161,8 +196,8 @@ steps:
         can be found at all, fail the same way rather than guessing.
 
         ARTIFACT COMMIT — after completing this step's work, commit any new or modified files
-        to the feature branch. Run `git -C <worktree_path> add .` and
-        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        to the feature branch. Run `git -C <tree> add .` and
+        `git -C <tree> commit` with a descriptive Conventional Commit message
         (e.g. `docs(specify): add specification for <feature-name>`). Skip silently if there
         is nothing to commit. Do not prompt — treat the optional git auto-commit hook as
         answered YES.
@@ -200,13 +235,34 @@ steps:
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
         PRIOR WORK — if `feature_dir` already contains a completed `plan.md` from a prior
         run, adopt it without regenerating. Note the adoption in the step output and
         continue. Only run the full plan command when `plan.md` does not exist or is empty.
 
         ARTIFACT COMMIT — after completing this step's work, commit any new or modified files
-        to the feature branch. Run `git -C <worktree_path> add .` and
-        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        to the feature branch. Run `git -C <tree> add .` and
+        `git -C <tree> commit` with a descriptive Conventional Commit message
         (e.g. `docs(plan): add implementation plan for <feature-name>`). Skip silently if
         there is nothing to commit. Do not prompt — treat the optional git auto-commit hook
         as answered YES.
@@ -243,13 +299,34 @@ steps:
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
         PRIOR WORK — if `feature_dir` already contains a completed `tasks.md` from a prior
         run, adopt it without regenerating. Note the adoption in the step output and
         continue. Only run the full tasks command when `tasks.md` does not exist or is empty.
 
         ARTIFACT COMMIT — after completing this step's work, commit any new or modified files
-        to the feature branch. Run `git -C <worktree_path> add .` and
-        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        to the feature branch. Run `git -C <tree> add .` and
+        `git -C <tree> commit` with a descriptive Conventional Commit message
         (e.g. `docs(tasks): add task list for <feature-name>`). Skip silently if there is
         nothing to commit. Do not prompt — treat the optional git auto-commit hook as
         answered YES.
@@ -287,9 +364,30 @@ steps:
         capturing the wrong tree. If no run context file can be found at all, fail the
         same way rather than guessing.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
         ARTIFACT COMMIT — after the capture pass, commit any new or modified files to the
-        feature branch. Run `git -C <worktree_path> add .` and
-        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        feature branch. Run `git -C <tree> add .` and
+        `git -C <tree> commit` with a descriptive Conventional Commit message
         (e.g. `docs(screenshots): add before screenshots for <feature-name>`). Skip
         silently if there is nothing to commit. Do not prompt — treat the optional git
         auto-commit hook as answered YES.
@@ -329,14 +427,35 @@ steps:
         do not adopt it. If no run context file can be found at all, fail the same way
         rather than guessing.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
         PRIOR WORK — if `worktree_path` already contains uncommitted or committed changes
         from a prior run, adopt them: rebase onto the current base ref if needed, extend or
         complete the implementation rather than rewriting it, and extend the tests rather
         than replacing them. Record what was inherited and what was added. Do not ask.
 
         ARTIFACT COMMIT — after the implementation is complete, commit all changes to the
-        feature branch. Run `git -C <worktree_path> add .` and
-        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        feature branch. Run `git -C <tree> add .` and
+        `git -C <tree> commit` with a descriptive Conventional Commit message
         appropriate to what was implemented (e.g. `feat: implement <feature-name>`; use
         finer-grained commits per logical unit when the changes span multiple concerns).
         Skip silently if there is nothing to commit. Do not prompt — treat the optional git
@@ -364,9 +483,30 @@ steps:
         feature the run context does not name, or no run context can be found, FAIL THIS
         STEP LOUDLY naming what you found.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
         ARTIFACT COMMIT — after the capture pass, commit any new or modified files to the
-        feature branch. Run `git -C <worktree_path> add .` and
-        `git -C <worktree_path> commit` with a descriptive Conventional Commit message
+        feature branch. Run `git -C <tree> add .` and
+        `git -C <tree> commit` with a descriptive Conventional Commit message
         (e.g. `docs(screenshots): add after screenshots for <feature-name>`). Skip silently
         if there is nothing to commit. Do not prompt — treat the optional git auto-commit
         hook as answered YES.
@@ -405,6 +545,37 @@ steps:
         context does not name, or no run context can be found, STOP: do not commit, do not
         push, do not open a pull request. Report what you found and what was pinned.
 
+        WORKTREE DISCIPLINE — the two SPECIFY_* overrides are read only by
+        `.specify/scripts/**`. Every other command this step runs — `git`, `gh`, the
+        build, the test suite, any file write — resolves against the current working
+        directory, and in an unattended run that is the PRIMARY checkout, not this run's
+        tree. Direct each of them at the tree explicitly: `git -C <tree> …`, or `cd
+        <tree>` first. A bare `git add`, `git commit`, `git push` or test command writes
+        to whatever branch the primary happens to be standing on.
+
+        <tree> is `worktree_path` from the run context when that field is non-empty, and
+        `primary_path` when it is empty — an empty `worktree_path` means the run has no
+        worktree (worktree_isolation=failed) and the primary IS this run's tree. Before
+        the first write, confirm both: `git -C <tree> rev-parse --show-toplevel` names
+        <tree>, and `git -C <tree> branch --show-current` names the run context's
+        `branch`. If either disagrees, FAIL THIS STEP LOUDLY rather than write.
+
+        ALL WRITES HAPPEN IN THIS RUN'S WORKTREE ON THIS RUN'S BRANCH. Finding yourself
+        about to write in the primary checkout — a commit onto the target branch, an edit
+        under `primary_path`, a branch cut from the primary's HEAD — is a FAILED STEP,
+        not a workaround. Stop and report it; do not commit there anyway, and do not move
+        the primary to make it fit.
+
+        SHIP FROM THE RUN'S TREE — push with `git -C <tree> push`, read state with
+        `git -C <tree> status|log|diff`, and pass `--head <branch>` and
+        `--base {{ inputs.target_branch }}` to `gh pr create` explicitly, so the pull
+        request cannot be inferred from whatever branch the primary is standing on. If
+        the head the pull request would open from is not the run context's `branch`,
+        STOP and report it. NEVER cut a new branch at the primary's tip to avoid a
+        base==head pull request: that moves the user's checkout under them and carries
+        unrelated commits from the primary into the pull request as if they were the
+        feature.
+
         UNATTENDED RUN — no user is present and no prompt can be answered.
         Treat every confirmation this command would normally ask as answered
         YES and continue without waiting: the readiness summary, the
@@ -424,9 +595,11 @@ steps:
         worktree could be attached — the user will want to know their working
         directory changed under them. If it reported session=primary for any
         reason other than enter_worktree being false, note that too: the branch
-        is in its worktree but the agent session ran from the primary checkout
-        via SPECIFY_INIT_DIR, so every write depended on that override holding
-        rather than on the working directory. And if it reported
+        is in its worktree but the agent session ran from the primary checkout,
+        so every write depended on SPECIFY_INIT_DIR holding for
+        `.specify/scripts/**` AND on each step pointing its own git, gh, build
+        and test commands at the worktree, rather than on the working
+        directory being right. And if it reported
         run_context=collision, put that near the TOP as well: a second unattended
         run owns the run context pointer in the primary checkout, so both runs'
         later steps were one unexported environment variable away from building
@@ -495,8 +668,11 @@ steps:
 
         RELEASE THE LOCK — as the FINAL action of this step, once the pull request is open
         (or once this step has stopped for any reason, including a rebase conflict), run
-        `bash .specify/extensions/worktrees/scripts/bash/release-lock.sh --run-id "<run_id
-        from run-context.json>"`. It removes the lock only while it still belongs to that
-        run id, so it can never free somebody else's. The lock expires by itself after
+        `bash <primary_path>/.specify/extensions/worktrees/scripts/bash/release-lock.sh
+        --run-id "<run_id from run-context.json>"`, taking `primary_path` from the run
+        context. The lock lives in the primary checkout and the script resolves it from
+        either tree, but the primary is where the script itself is certain to be — a
+        relative path resolves against wherever this step last stood. It removes the lock
+        only while it still belongs to that run id, so it can never free somebody else's. The lock expires by itself after
         lock_ttl_minutes, so skipping this corrupts nothing — it just blocks the next run
         against this checkout for up to that long. Report the RELEASE_STATUS.

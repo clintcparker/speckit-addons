@@ -186,18 +186,29 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    ```text
    SPECIFY_INIT_DIR=<worktree path>
    SPECIFY_FEATURE_DIRECTORY=<worktree path>/specs/<feature-dir>
+   worktree_path=<worktree path>
    ```
 
-   Both are first-priority overrides honored by `.specify/scripts/bash/common.sh`. `SPECIFY_INIT_DIR`
-   must be exported for **every** `.specify/scripts/**` invocation from here to the end of the run;
-   `SPECIFY_FEATURE_DIRECTORY` must be set before the spec is created. Under `before_specify` the
-   feature directory does not exist yet — name the path it *will* have, deriving `<feature-dir>` from
-   the branch name. These belong in the structured fields block precisely because prose gets skimmed
-   and this is the only thing keeping the rest of the run out of the wrong tree.
+   The first two are first-priority overrides honored by `.specify/scripts/bash/common.sh`.
+   `SPECIFY_INIT_DIR` must be exported for **every** `.specify/scripts/**` invocation from here to the
+   end of the run; `SPECIFY_FEATURE_DIRECTORY` must be set before the spec is created. Under
+   `before_specify` the feature directory does not exist yet — name the path it *will* have, deriving
+   `<feature-dir>` from the branch name. These belong in the structured fields block precisely because
+   prose gets skimmed and this is the only thing keeping the rest of the run out of the wrong tree.
 
-   `session=primary` is a **degraded run**. It stays correct only as long as every later step honors
-   the overrides, and nothing enforces that. A workflow that ships must surface it in the pull request
-   description.
+   **The overrides are not isolation, and must not be reported as if they were.** Nothing outside
+   `.specify/scripts/**` reads them. Plain `git`, `gh`, build and test commands resolve against the
+   *current working directory*, which with `session=primary` is the primary checkout — so a later step
+   that runs a bare `git commit` commits onto whatever branch the primary is standing on, however
+   faithfully it exported `SPECIFY_INIT_DIR`. `worktree_path` is in the fields block for exactly that
+   reason: every later step must direct its own commands at that path (`git -C <path> …`, or `cd
+   <path>` first). State the invariant they inherit alongside it — **all writes happen in this run's
+   worktree on this run's branch, and a step about to write in the primary checkout has failed rather
+   than found a workaround.**
+
+   `session=primary` is a **degraded run**. It stays correct only as long as every later step both
+   honors the overrides and points its own commands at the worktree, and nothing enforces either. A
+   workflow that ships must surface it in the pull request description.
 
    When `enter_worktree` is `false` the session also stays put — report `session=primary (by
    configuration)`, which is a choice rather than a degradation. `--in-place`/`--no-worktree` creates
@@ -302,9 +313,9 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
    reason).
 
    **`session`** carries step 4's outcome: `worktree` or `primary`. When it is `primary` for any
-   reason other than `enter_worktree: false`, the `SPECIFY_INIT_DIR` and `SPECIFY_FEATURE_DIRECTORY`
-   lines go in the fields block too, and the reason is named on the Session row (`primary —
-   EnterWorktree declined, unattended run`).
+   reason other than `enter_worktree: false`, the `SPECIFY_INIT_DIR`, `SPECIFY_FEATURE_DIRECTORY` and
+   `worktree_path` lines go in the fields block too, and the reason is named on the Session row
+   (`primary — EnterWorktree declined, unattended run`).
 
    `worktree_isolation=created` together with `session=primary` is an ordinary unattended run, and it
    is exactly the combination a single enum could not express: the worktree is right and nothing is
@@ -344,6 +355,12 @@ Environment variable `SPECIFY_WORKTREE_PATH` overrides the computed path entirel
 - **Never displace another run's pointer** — both the lock script's exit 3 (step 2) and the
   run-context writer's exit 3 (step 5) are decisions, not errors. `--force` exists for an operator
   clearing litter by hand, never for this command resolving a race
+- **The overrides isolate only what reads them.** `SPECIFY_INIT_DIR` and
+  `SPECIFY_FEATURE_DIRECTORY` are honored by `.specify/scripts/**` and by nothing else, so with
+  `session=primary` every plain `git`, `gh`, build and test command a later step runs still resolves
+  against the primary checkout. Report `worktree_path` in the fields block so those steps can direct
+  their own commands at the worktree, and never describe a session that never moved as isolated —
+  it is isolated only for as long as each later step keeps pointing its commands at the right tree
 - **Default behavior is to create a worktree** — only skip if the user explicitly passes `--in-place` or `--no-worktree`, or `auto_create` is `false` in config and this is a hook call
 - **One worktree per branch** — never create a duplicate; report the existing path and exit successfully
 - **Never modify the primary checkout, with one narrow exception** — no `checkout`, no `switch`, no stash in normal operation. The primary stays where the user left it, which is the whole point of creating the branch inside the worktree. The single exception is step 0's recovery path, where the feature branch is *already* checked out in the primary and the primary is provably clean (empty `git status --porcelain`, empty `git stash list`). There, and only there, `git checkout <base>` is permitted so the branch can be released to a worktree — and the move must be reported loudly
