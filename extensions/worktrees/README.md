@@ -69,6 +69,8 @@ sibling_pattern: "{{repo}}--{{branch}}"
 dotworktrees_dir: ".worktrees"
 base_ref: ""                 # ref new branches are cut from; "" = auto-detect
                               # (origin/main → main → origin/master → master → HEAD)
+lock_ttl_minutes: 240         # how long an unreleased run lock keeps blocking the
+                               # next run against this checkout
 enter_worktree: true          # move the session into the new worktree; false to
                                # just print the path and stay put
 ```
@@ -105,8 +107,8 @@ the worktree, the other describes where the agent session is standing.
 | Field | Values | Meaning |
 |---|---|---|
 | `worktree_isolation` | `created`, `already`, `entered`, `recovered`, `failed` | What happened to the branch and its worktree (`## Outline` step 0) |
-| `session` | `worktree`, `primary` | Whether the session's working directory actually moved (`## Outline` step 3) |
-| `run_context` | a path, or `collision` | Where this run's feature identity was pinned (`## Outline` step 4) |
+| `session` | `worktree`, `primary` | Whether the session's working directory actually moved (`## Outline` step 4) |
+| `run_context` | a path, or `collision` | Where this run's feature identity was pinned (`## Outline` step 5) |
 
 Moving the session needs the `EnterWorktree` tool, which requires interactive approval. In an
 **unattended workflow run there is nobody to approve it**, so the normal result is
@@ -170,6 +172,48 @@ just aims the same drift at that run instead. The second run still gets its own 
 the command reports `run_context=collision` naming both branches. It is a loud degradation rather than
 a guarantee; concurrent unattended runs against one primary checkout are not supported.
 
+### The run lock
+
+As of 2.4.0 that rule is enforced before anything is created, rather than discovered halfway through.
+`## Outline` step 2 takes a lockfile at `<primary>/.specify/run.lock` as soon as the branch name is
+known:
+
+```json
+{
+  "run_id": "20260812T112100Z-005-user-auth",
+  "pid": 98293,
+  "timestamp": "2026-08-12T11:21:00Z",
+  "epoch": 1786663260,
+  "ttl_minutes": 240
+}
+```
+
+A second run with a different `run_id` is refused with **exit 3** while that lock is live, and the
+lock is live when *either* signal says so:
+
+- **the pid is alive** (`kill -0`), or
+- **the lock is younger than `lock_ttl_minutes`** (default 240; `--ttl-minutes` overrides).
+
+Only when the process is gone *and* the TTL has expired is the lock treated as litter and taken over
+(`LOCK_STATUS=stale-replaced`).
+
+**The age is what holds the line; the pid is a hint.** An agent harness runs each command in a shell
+that exits the moment the call returns, so a pid written by one call is already dead by the next. A
+pid-only check reads its own lock as stale within milliseconds and lets every concurrent run through
+— which is the bug this guard exists to stop. Pass `--pid "$PPID"` from the calling shell (the agent
+process, which lives for the whole run), never `"$$"`.
+
+Because the TTL is the backstop and not the mechanism, a run that finishes should hand the lock back:
+
+```bash
+bash scripts/bash/release-lock.sh --run-id 20260812T112100Z-005-user-auth
+```
+
+It removes the file only while that `run_id` still owns it — `RELEASE_STATUS` is `released`,
+`not-ours`, or `not-held` — so it can never free somebody else's lock. All three `speckit-addons`
+workflows call it from their final step. `--force` on `acquire-lock.sh` is for an operator clearing a
+lock they know is dead, never for a command resolving a race.
+
 ### It reports hazards; it does not fix them
 
 The command creates a branch in a worktree and moves the session into it. Conditions it merely
@@ -223,6 +267,18 @@ bash scripts/bash/write-run-context.sh \
 Exit 0 written, 1 usage or environment error, 3 another live run owns the pointer in this primary
 checkout. `--json` prints the context it wrote; `--force` displaces a live pointer and exists for
 clearing litter by hand, not for winning a race.
+
+The lock is a third pair of scripts, taken before either of the above creates anything and handed
+back by the last step of the run:
+
+```bash
+bash scripts/bash/acquire-lock.sh --run-id 20260812T112100Z-005-user-auth --pid "$PPID"
+bash scripts/bash/release-lock.sh --run-id 20260812T112100Z-005-user-auth
+```
+
+`acquire-lock.sh` exits 0 acquired (`LOCK_STATUS` is `acquired`, `refreshed`, `stale-replaced` or
+`forced`), 1 usage or environment error, 3 a live run holds the lock. `release-lock.sh` always exits
+0 and reports `RELEASE_STATUS=released|not-ours|not-held`. Both take `--json`.
 
 ## Environment variables
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "updated_at": "2026-08-12T19:00:00Z",
+  "updated_at": "2026-08-13T00:00:00Z",
   "catalog_url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/main/workflows/catalog.json",
   "workflows": {
     "send-it": {
@@ -8,12 +8,12 @@
       "name": "Spec to PR, unattended",
       "description": "worktree → specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `worktrees`, `screenshots` and `ship` extensions.",
       "author": "clintcparker",
-      "version": "0.6.0",
-      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/send-it-v0.6.0/workflows/send-it/workflow.yml",
+      "version": "0.7.0",
+      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/send-it-v0.7.0/workflows/send-it/workflow.yml",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/workflows/send-it",
-      "documentation": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.6.0/workflows/send-it/README.md",
-      "changelog": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.6.0/workflows/send-it/CHANGELOG.md",
+      "documentation": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.7.0/workflows/send-it/README.md",
+      "changelog": "https://github.com/clintcparker/speckit-addons/blob/send-it-v0.7.0/workflows/send-it/CHANGELOG.md",
       "license": "MIT",
       "requires": {
         "speckit_version": ">=0.8.12"
@@ -28,19 +28,19 @@
         "screenshots"
       ],
       "created_at": "2026-07-30T00:00:00Z",
-      "updated_at": "2026-08-12T19:00:00Z"
+      "updated_at": "2026-08-13T00:00:00Z"
     },
     "send-it-checked": {
       "id": "send-it-checked",
       "name": "Spec to PR, unattended, with review and QA",
       "description": "send-it plus staff review and QA, each with one fix-and-re-run pass, before shipping — with before/after UI screenshots. Requires the `worktrees`, `screenshots`, `ship`, `staff-review` and `qa` extensions.",
       "author": "clintcparker",
-      "version": "0.7.0",
-      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/send-it-checked-v0.7.0/workflows/send-it-checked/workflow.yml",
+      "version": "0.8.0",
+      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/send-it-checked-v0.8.0/workflows/send-it-checked/workflow.yml",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/workflows/send-it-checked",
-      "documentation": "https://github.com/clintcparker/speckit-addons/blob/send-it-checked-v0.7.0/workflows/send-it-checked/README.md",
-      "changelog": "https://github.com/clintcparker/speckit-addons/blob/send-it-checked-v0.7.0/workflows/send-it-checked/CHANGELOG.md",
+      "documentation": "https://github.com/clintcparker/speckit-addons/blob/send-it-checked-v0.8.0/workflows/send-it-checked/README.md",
+      "changelog": "https://github.com/clintcparker/speckit-addons/blob/send-it-checked-v0.8.0/workflows/send-it-checked/CHANGELOG.md",
       "license": "MIT",
       "requires": {
         "speckit_version": ">=0.8.12"
@@ -56,19 +56,19 @@
         "screenshots"
       ],
       "created_at": "2026-07-30T00:00:00Z",
-      "updated_at": "2026-08-12T19:00:00Z"
+      "updated_at": "2026-08-13T00:00:00Z"
     },
     "yolo": {
       "id": "yolo",
       "name": "Full SDD Cycle - no gates",
       "description": "Runs worktree → specify → plan → tasks → implement without review gates. Requires the `worktrees` extension.",
       "author": "clintcparker",
-      "version": "0.5.0",
-      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.5.0/workflows/yolo/workflow.yml",
+      "version": "0.6.0",
+      "url": "https://raw.githubusercontent.com/clintcparker/speckit-addons/yolo-v0.6.0/workflows/yolo/workflow.yml",
       "repository": "https://github.com/clintcparker/speckit-addons",
       "homepage": "https://github.com/clintcparker/speckit-addons/tree/main/workflows/yolo",
-      "documentation": "https://github.com/clintcparker/speckit-addons/blob/yolo-v0.5.0/workflows/yolo/README.md",
-      "changelog": "https://github.com/clintcparker/speckit-addons/blob/yolo-v0.5.0/workflows/yolo/CHANGELOG.md",
+      "documentation": "https://github.com/clintcparker/speckit-addons/blob/yolo-v0.6.0/workflows/yolo/README.md",
+      "changelog": "https://github.com/clintcparker/speckit-addons/blob/yolo-v0.6.0/workflows/yolo/CHANGELOG.md",
       "license": "MIT",
       "requires": {
         "speckit_version": ">=0.8.12"
@@ -80,7 +80,7 @@
         "automation"
       ],
       "created_at": "2026-07-29T00:00:00Z",
-      "updated_at": "2026-08-12T19:00:00Z"
+      "updated_at": "2026-08-13T00:00:00Z"
     }
   }
 }

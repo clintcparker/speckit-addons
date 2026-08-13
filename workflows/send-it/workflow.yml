@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it"
   name: "Spec to PR, unattended"
-  version: "0.6.0"
+  version: "0.7.0"
   author: "clintcparker"
   description: "worktree → specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `worktrees`, `screenshots` and `ship` extensions."
 
@@ -68,6 +68,22 @@ steps:
       args: >-
         UNATTENDED RUN — no user is present; never prompt and never ask which layout.
 
+        ACQUIRE LOCK — after determining the branch name (Outline step 1) and before
+        creating anything (step 3), generate a run_id (format: <utc-timestamp>-<branch>,
+        e.g. 20260812T112100Z-005-user-auth) and call acquire-lock.sh --run-id "$RUN_ID"
+        --pid "$PPID" (Outline step 2). Pass $PPID, never $$: every command here runs in a
+        shell that exits as soon as it returns, so $$ names a process that is already dead
+        by the next step and a lock stamped with it looks stale to every later run. $PPID
+        is the agent process, which lives for the whole run.
+
+        Exit code 3 means a live concurrent run holds the lock — either its process is
+        alive or its lock is younger than lock_ttl_minutes: report the conflict naming the
+        existing run_id and pid, and STOP — do not create the worktree, do not pass
+        --force. Skip this step only when step 0 determined worktree_isolation=already.
+        Pass $RUN_ID to write-run-context.sh via --run-id in step 5 so the lock and run
+        context share the same identifier; that file is where the step which releases the
+        lock at the end of this workflow reads it from.
+
         Ensure this session is inside a feature worktree before any later step touches
         the repo. Follow the command's Outline step 0 case detection: no-op if already
         isolated; use the existing BRANCH NAME (never --from-description) if the primary
@@ -86,7 +102,7 @@ steps:
         the call to be refused and expect session=primary. That is the normal outcome of
         an unattended run, not a failure — but do NOT let the spec land in the primary
         checkout because of it. Emit SPECIFY_INIT_DIR and SPECIFY_FEATURE_DIRECTORY in the
-        fields block exactly as Outline step 3 requires, and export SPECIFY_INIT_DIR for
+        fields block exactly as Outline step 4 requires, and export SPECIFY_INIT_DIR for
         every .specify/scripts/** invocation from here to the end of the run.
 
         REPORT, DO NOT REMEDY. Creating the branch inside its worktree is this step's whole
@@ -96,12 +112,13 @@ steps:
         close the gap, and no copying untracked files across. "Never prompt" is not licence
         to act unilaterally.
 
-        PIN THE FEATURE — take Outline step 4 on every path out of this command, including
-        worktree_isolation=failed: write the run context with write-run-context.sh and
-        report run_context=<path> in the fields block. Every later step of this workflow
-        resolves FEATURE_DIR from that file and has nothing else to go on. If the script
-        exits 3, another unattended run owns the pointer in this primary checkout — report
-        run_context=collision naming both branches, and do NOT pass --force.
+        PIN THE FEATURE — take Outline step 5 on every path out of this command, including
+        worktree_isolation=failed: write the run context with write-run-context.sh
+        --run-id "$RUN_ID" and report run_context=<path> in the fields block. Every later
+        step of this workflow resolves FEATURE_DIR from that file and has nothing else to
+        go on. If the script exits 3, another unattended run owns the pointer in this
+        primary checkout — report run_context=collision naming both branches, and do NOT
+        pass --force.
 
         Carry worktree_isolation, session AND run_context forward, so the ship step can
         surface a recovered, failed, degraded, or collided outcome in the pull request
@@ -416,7 +433,7 @@ steps:
         somebody else's feature. Otherwise no mention is needed.
 
         Also carry forward anything the worktree step reported under Outline
-        step 5 — a base ref behind its local counterpart, or feature inputs that
+        step 6 — a base ref behind its local counterpart, or feature inputs that
         are gitignored and therefore absent from the worktree. Both change how
         this pull request should be read: the first means the branch may not
         contain commits the reviewer has locally, the second means the feature
@@ -461,3 +478,25 @@ steps:
         instead, add the single line "No UI changes — screenshots skipped."
         Verify the screenshot commits are actually part of the pushed head
         before linking.
+
+        RUN ID STAMP — end the pull request description with the HTML comment
+        `<!-- speckit-run-id: <run_id> -->`, taking run_id from run-context.json. It
+        renders as nothing and it is what makes the next check possible.
+
+        Before rewriting the body of a pull request that ALREADY EXISTS for this branch,
+        read the current body first. If it carries a `speckit-run-id` marker that is not
+        yours and sorts LATER than yours — run ids begin with a UTC timestamp, so a plain
+        string comparison is a time comparison — a newer run has already described this
+        branch: do NOT overwrite it. Leave the body alone, post your summary as a pull
+        request COMMENT instead, and say in the run summary that a newer run owns the
+        description. An older marker, no marker, or your own is yours to rewrite. The lock
+        should have made this impossible; this is the backstop for when it did not, and
+        losing a description is not worth the tidiness.
+
+        RELEASE THE LOCK — as the FINAL action of this step, once the pull request is open
+        (or once this step has stopped for any reason, including a rebase conflict), run
+        `bash .specify/extensions/worktrees/scripts/bash/release-lock.sh --run-id "<run_id
+        from run-context.json>"`. It removes the lock only while it still belongs to that
+        run id, so it can never free somebody else's. The lock expires by itself after
+        lock_ttl_minutes, so skipping this corrupts nothing — it just blocks the next run
+        against this checkout for up to that long. Report the RELEASE_STATUS.

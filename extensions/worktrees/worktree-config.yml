@@ -28,6 +28,17 @@ dotworktrees_dir: ".worktrees"
 # decides what the feature forks from.
 base_ref: ""
 
+# How long an unreleased run lock (<primary>/.specify/run.lock) stays held before a new
+# run may take it over. One run per primary checkout is the rule; this is the ceiling on
+# how long a run that died without releasing can block the next one.
+#
+# Age is the signal that actually enforces the rule. The recorded pid is checked too, but
+# only as positive evidence: an agent harness runs each command in a shell that exits
+# immediately, so a dead pid is not proof the run ended. Raise this above the longest run
+# you expect (send-it-checked with screenshots and QA is the long one); a run that ends
+# cleanly releases the lock and never reaches the ceiling.
+lock_ttl_minutes: 240
+
 # Move the agent session into the new worktree once it exists, so the spec and every
 # later phase (plan/tasks/implement/ship) is written there rather than in the primary
 # checkout. Set to false to just print the path and stay put.

@@ -45,15 +45,15 @@ is not installability. That gap is the entire reason
 
 | Add-on | Version | Source | What it contributes |
 |---|---|---|---|
-| [`worktrees`](../extensions/worktrees/) | 2.3.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree; since 2.3.0 it also writes the run context file every later step reads its feature identity from |
+| [`worktrees`](../extensions/worktrees/) | 2.4.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree; since 2.3.0 it also writes the run context file every later step reads its feature identity from; since 2.4.0 it takes the run lock that keeps two runs off one primary checkout |
 | [`git`](../extensions/git/) | 1.1.0 | hosted here | Feature-branch naming and numbering. The worktrees hook delegates to its `create-new-feature-branch.sh` to derive the branch name |
 | [`screenshots`](../extensions/screenshots/) | 0.1.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
 | `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) | `speckit.ship.run` — pre-flight, rebase, push, PR creation |
 | `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) | `speckit.staff-review.run` — review report into `FEATURE_DIR/reviews/` |
 | `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) | `speckit.qa.run` — QA report into `FEATURE_DIR/qa/` |
-| [`send-it`](../workflows/send-it/) | 0.4.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
-| [`send-it-checked`](../workflows/send-it-checked/) | 0.4.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
-| [`yolo`](../workflows/yolo/) | 0.3.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
+| [`send-it`](../workflows/send-it/) | 0.7.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
+| [`send-it-checked`](../workflows/send-it-checked/) | 0.8.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`yolo`](../workflows/yolo/) | 0.6.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
 
 The three first-party extensions are published from this repo as release assets
 with a `sha256` in the catalog. The three third-party ones are pinned pointers at
@@ -158,7 +158,28 @@ control those tags.
    And there is exactly one pointer per primary checkout, so **one unattended run per
    primary checkout**: a second is reported as `run_context=collision` and surfaced in
    the pull request rather than silently repointing the first.
-7. **The rest of the chain.** `plan` → `tasks` → `screenshots-before` →
+7. **The run lock enforces "one run per primary checkout" up front.** The collision
+   report above is a diagnosis after the fact — by the time a second run reaches it, both
+   runs have already been creating things. `worktrees` 2.4.0 takes a lockfile at
+   `<primary>/.specify/run.lock` as soon as the branch name is known and before anything
+   is created: `run_id`, `pid`, `timestamp`, `epoch`, `ttl_minutes`. A second run gets
+   exit 3 and stops.
+
+   **Liveness cannot be a PID question here.** Every command an agent runs gets a shell
+   that exits the moment the call returns, so a PID recorded by one call is dead by the
+   next; a PID-only check would call its own lock stale within milliseconds and let every
+   concurrent run through. The lock is therefore held while its process is alive **or**
+   while it is younger than `lock_ttl_minutes` (default 240, in `worktree-config.yml`),
+   and the step passes `--pid "$PPID"` — the agent process — rather than `$$`. Because the
+   TTL is a backstop and not the mechanism, each workflow's last step (`ship`, or
+   `implement` in `yolo`) calls `release-lock.sh`, which frees the lock only while this
+   run still owns it.
+
+   The `ship` step carries the cheap second guard too: it ends the pull request
+   description with `<!-- speckit-run-id: <run_id> -->` and will not overwrite a body
+   whose marker names a *later* run — it comments instead. Run ids start with a UTC
+   timestamp, so string order is time order.
+8. **The rest of the chain.** `plan` → `tasks` → `screenshots-before` →
    `implement` → (`review` → `qa`, in `send-it-checked`) → `screenshots-after` →
    `ship`. The baseline capture has to sit between `tasks` and `implement`: at
    that point the worktree differs from the base only by spec documents, so the
@@ -166,7 +187,7 @@ control those tags.
    `send-it-checked` the after-capture sits after `qa` rather than after
    `implement`, so it shows the tree that actually ships rather than one the
    review pass has since changed.
-8. **`ship` closes it out.** It commits what is outstanding, rebases onto the
+9. **`ship` closes it out.** It commits what is outstanding, rebases onto the
    target branch, pushes, builds the PR description — including one screenshot
    table per captured target, with Before and After columns and a row per
    viewport, pinned to the pushed head SHA — and opens the pull request.
@@ -223,9 +244,11 @@ Five things about that sequence:
   `workflow run` does.
 - **`worktrees` is no longer optional for any of these workflows.** All three
   dispatch `speckit.worktrees.create` as their first step, which fails at
-  dispatch when the extension is absent. It must be at **2.3.0 or later** — every
-  step after the first resolves its feature from the run context file written
-  there. The workflows also rely on the `session` field and the
+  dispatch when the extension is absent. It must be at **2.4.0 or later** — that
+  is where the run lock lands, and without it two runs launched against one
+  checkout interleave rather than the second one refusing to start. 2.3.0 is where
+  the run context file every step after the first resolves its feature from was
+  added. The workflows also rely on the `session` field and the
   `EnterWorktree`-refused path added in 2.2.0, and on the idempotent case
   detection added in 2.1.0. Against 2.0.0 the step and the `before_specify` hook
   would each derive a branch name and mint two feature numbers; against 2.1.0 an
@@ -369,6 +392,17 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
 - **An unattended run cannot enter its own worktree.** `EnterWorktree` needs
   interactive approval. Expect `session=primary` and a run that stays correct only
   because every step honors `SPECIFY_INIT_DIR`. See "The session model" above.
+- **A PID is not a run.** Every command an agent runs gets a shell that exits when
+  the call returns, so nothing that outlives a single tool call can be identified
+  by the PID that wrote it. The run lock records one, but only as positive
+  evidence — alive means live, dead means nothing — and leans on
+  `lock_ttl_minutes` for the actual guarantee. Anything else in this harness that
+  wants to know whether a run is still going needs the same treatment.
+- **A lock left unreleased blocks the next run for its whole TTL.** That is the
+  cost of the previous bullet: with the PID unusable as an all-clear, only an
+  explicit `release-lock.sh` or the TTL frees it. Each workflow's last step
+  releases it; a run killed mid-flight does not, and the next run against that
+  checkout waits (default four hours) or clears the file by hand.
 - **Never let the worktree step repair what it reports.** A base ref behind local
   `main` is a real hazard, and `git merge --ff-only main` in the worktree is the
   wrong fix: it drags unpushed commits onto the feature branch, where they surface

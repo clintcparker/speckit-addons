@@ -5,6 +5,34 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-13
+
+### Fixed
+- **Two concurrent unattended runs against the same primary checkout can no longer race.**
+  The `worktree` step now acquires a per-primary-checkout lock (`acquire-lock.sh`) after
+  determining the branch name (Outline step 1) and before creating anything (Outline step 3).
+  A second run whose lock call returns exit code 3 stops immediately — it reports the
+  existing `run_id` and `pid` and does not proceed to create a worktree, run review, QA,
+  or corrupt the first run's working tree. The lock and the run context now share the same
+  `run_id` (passed explicitly via `--run-id "$RUN_ID"` to `write-run-context.sh`).
+  Requires `worktrees` ≥ 2.4.0.
+- **A dead PID is not evidence a run ended, so the lock does not rely on one.** An agent
+  harness runs each command in a shell that exits as soon as the call returns; a lock
+  stamped with that shell's `$$` reads as stale milliseconds later, which would have let
+  every concurrent run through. The lock is held while its process is alive **or** while it
+  is younger than `lock_ttl_minutes` (default 240), and the step passes `--pid "$PPID"` —
+  the agent process — rather than `$$`.
+- **The `ship` step stamps its `run_id` into the pull request description and refuses to
+  overwrite a newer one.** The description now ends with
+  `<!-- speckit-run-id: <run_id> -->`, and before rewriting the body of a pull request that
+  already exists the step compares markers: a marker naming a later run (run ids start with
+  a UTC timestamp, so string order is time order) means a newer run has already described
+  this branch, and this one posts a comment instead of overwriting it. Belt and braces
+  behind the lock, for when the lock was not held.
+- **The `ship` step releases the run lock as its final action**, so the next run against
+  this checkout is not blocked until the lock's TTL expires. `release-lock.sh` frees the
+  lock only while this run still owns it.
+
 ## [0.7.0] — 2026-08-12
 
 ### Fixed
