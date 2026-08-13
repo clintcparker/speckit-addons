@@ -12,7 +12,9 @@ before/after tables embedded. Everything below installs through Spec Kit's own
 catalog mechanism — nothing an add-on owns is hand-patched into `.specify/`. The
 only hand edits anywhere are to core spec-kit: one key, plus the patch that
 makes core actually read it (see
-[core-feature-numbering.md](core-feature-numbering.md)).
+[core-feature-numbering.md](core-feature-numbering.md)), and an optional second
+patch that stops the helper scripts answering "which feature is this?" from the
+checkout (see [core-helper-scripts.md](core-helper-scripts.md)).
 
 ## Four separate catalog stacks
 
@@ -186,6 +188,20 @@ control those tags.
    And there is exactly one pointer per primary checkout, so **one unattended run per
    primary checkout**: a second is reported as `run_context=collision` and surfaced in
    the pull request rather than silently repointing the first.
+
+   **The block asks the agent to fail on a mismatch; the scripts still cannot refuse to
+   produce one.** Unpinned, `get_feature_paths` resolves from `.specify/feature.json` —
+   per-checkout state that every explicit resolution writes back to — so in the primary
+   right after a merge it names the feature that just shipped, and there is no way for a
+   caller to ask which source the answer came from. Consumers here close that from their
+   own side: the `screenshots` extension cross-checks whatever
+   `check-prerequisites.sh --paths-only --json` resolves against the pinned value and
+   stops on a disagreement (issue #8). The other side of it is an opt-in
+   `SPECIFY_STRICT_FEATURE=1` in core, which makes the fallback a hard error rather than
+   a quiet answer — [core-helper-scripts.md](core-helper-scripts.md) has that patch and
+   its verification, along with the `--allow-missing-plan` one for the mirror-image
+   failure, where `check-prerequisites.sh --json` exits 1 on any feature that never ran
+   `/speckit-plan`.
 7. **The run lock enforces "one run per primary checkout" up front.** The collision
    report above is a diagnosis after the fact — by the time a second run reaches it, both
    runs have already been creating things. `worktrees` 2.4.0 takes a lockfile at
@@ -466,6 +482,20 @@ curl -sL https://github.com/clintcparker/speckit-addons/releases/download/ext-gi
   (`branch_numbering`) — the fork here already defaults `branch_numbering` to
   `timestamp`. Note that `feature_numbering` alone changes nothing until core is
   patched to read it; see [core-feature-numbering.md](core-feature-numbering.md).
+- **`.specify/feature.json` is per-checkout state, not per-run.** It is what
+  `get_feature_paths` falls back to with no `SPECIFY_FEATURE_DIRECTORY` set, and
+  every command that *does* resolve explicitly persists its answer back into it. So
+  in the primary right after a merge it names the feature that just shipped, and
+  the helper scripts exit 0 on it — `setup-plan.sh` goes further and plants a
+  template `plan.md` there. Do not read an exit code as evidence of the right
+  feature; cross-check what a script resolved against the run context, and see
+  [core-helper-scripts.md](core-helper-scripts.md) for the `SPECIFY_STRICT_FEATURE`
+  patch that turns the fallback into an error.
+- **`check-prerequisites.sh --json` gates on `plan.md`.** Any feature that never
+  ran `/speckit-plan` — a hand-started branch, a run that adopted an existing spec
+  — makes it exit 1, including for callers that only wanted `FEATURE_DIR`. Use
+  `--paths-only`, which resolves without validating and without persisting the
+  override into `feature.json`.
 
 ## Publishing changes
 
