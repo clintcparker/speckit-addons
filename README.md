@@ -18,9 +18,9 @@ does not register the others. Each section below has its own `catalog add`.
 
 | ID | Version | Description |
 |---|---|---|
-| [`yolo`](workflows/yolo/) | 0.7.0 | Full SDD cycle — `worktree` → `specify` → `plan` → `tasks` → `implement`, no review gates |
-| [`send-it`](workflows/send-it/) | 0.8.0 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
-| [`send-it-checked`](workflows/send-it-checked/) | 0.9.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
+| [`yolo`](workflows/yolo/) | 0.8.0 | Full SDD cycle — `worktree` → `specify` → `plan` → `tasks` → `implement`, no review gates |
+| [`send-it`](workflows/send-it/) | 0.9.0 | Spec to PR, unattended — `yolo` plus screenshots and `ship`, ending in an open pull request |
+| [`send-it-checked`](workflows/send-it-checked/) | 0.10.0 | `send-it` plus staff review and QA, each with one fix-and-re-run pass |
 
 ```bash
 specify workflow catalog add \
@@ -53,7 +53,7 @@ The rest are **pinned pointers** at somebody else's repository. See
 
 | ID | Version | Source |
 |---|---|---|
-| [`screenshots`](extensions/screenshots/) | 0.1.0 | Hosted here |
+| [`screenshots`](extensions/screenshots/) | 0.2.0 | Hosted here |
 | [`worktrees`](extensions/worktrees/) | 2.5.0 | Hosted here — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
 | [`git`](extensions/git/) | 1.1.0 | Hosted here — fork of spec-kit's bundled `git` v1.0.0 |
 | `ship` | 1.0.0 | Pointer → [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) |

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.0 (2026-08-13)
+
+### Fixed
+- **The command now resolves an ignored screenshots directory instead of leaving
+  every later step to work around it.** Repos routinely ignore `screenshots/` or
+  `specs/*/screenshots/` for unrelated reasons, and the images still have to
+  reach the pushed head because `speckit.ship.run` links them from the pull
+  request body — a link to an ignored path 404s for every reviewer. The
+  workaround each step reached for independently, `git add -f`, stages one commit
+  and leaves the next step facing the same conflict. New step 2 checks
+  `git check-ignore` against `FEATURE_DIR/screenshots/` before anything is
+  written and, when a rule matches, appends `!screenshots/` to
+  `FEATURE_DIR/.gitignore` and commits it. A `.gitignore` inside the feature
+  directory outranks the repo root's, so plain `git add` works for the before
+  pass, the after pass and ship. The repo's own ignore rule is untouched.
+- The commit instruction in the final step now names `FEATURE_DIR/.gitignore`
+  alongside `FEATURE_DIR/screenshots/`, and forbids `git add -f` outright — a
+  force-add hides that step 2 did not run.
+
 ## 0.1.0 (2026-08-05)
 
 ### Added

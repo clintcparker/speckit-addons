@@ -5,6 +5,28 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-08-13
+
+### Fixed
+- **Artifacts a step writes under the feature directory are now made trackable once,
+  instead of being force-added by every step that touches them.** Repos routinely ignore
+  `specs/*/screenshots/` and `specs/*/releases/` for unrelated reasons, and the workflow
+  needs their contents to reach the pushed head. Every step that met the conflict reached
+  for `git add -f` independently — five separate times across two observed runs — which
+  stages one commit and leaves the next step, the next run and the reviewer's checkout
+  facing exactly the same rule. Every step now carries an ARTIFACT VISIBILITY block beside
+  its WORKTREE DISCIPLINE block: run `git -C <tree> check-ignore -v` against `feature_dir`
+  and the subdirectories the step wrote; when a rule matches, append `!<subdir>/` to
+  `<feature_dir>/.gitignore` and commit it, because a `.gitignore` inside the feature
+  directory outranks the repo root's and a plain `git add` works from then on. `git add -f`
+  is now forbidden outright rather than left as the obvious workaround. The repo's own
+  ignore rules are never edited.
+- **The `ship` step verifies the screenshots it links are actually in the pushed head.**
+  It said so in prose; it now says how — `git -C <tree> ls-tree -r <head_sha> --
+  <feature_dir>/screenshots/` — and what to do when an image is missing, which was the
+  concrete failure behind the force-adds: an image git still considers ignored was never
+  committed, so every URL in the Screenshots table 404s for the reviewer.
+
 ## [0.9.0] — 2026-08-13
 
 ### Fixed
@@ -246,6 +268,9 @@ First published release. `send-it` 0.1.0 with two steps inserted before `ship`.
 - `ship` step `args` instructing it to proceed past surviving review/QA
   findings and summarize them under "Known issues" in the pull request.
 
+[0.10.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.10.0
+[0.9.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.9.0
+[0.8.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.8.0
 [0.7.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.7.0
 [0.6.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.6.0
 [0.5.0]: https://github.com/clintcparker/speckit-addons/releases/tag/send-it-checked-v0.5.0
