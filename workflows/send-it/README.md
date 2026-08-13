@@ -142,6 +142,14 @@ never do. If you want those gates, use
   failure called out in the description.
 - **A vague `spec` produces a confident, fast, wrong pull request.** Removing the
   interruptions does not remove the need to know what you want.
+- **Isolation by path override covers only `.specify` scripts.** `SPECIFY_INIT_DIR`
+  and `SPECIFY_FEATURE_DIRECTORY` are read by `.specify/scripts/**` and by nothing
+  else, so a plain `git`, `gh`, build or test command lands wherever the session is
+  standing — the primary checkout, in an unattended run where `EnterWorktree` could not
+  be approved. Every step therefore carries a WORKTREE DISCIPLINE block telling it to
+  aim its own commands at the run's tree (`git -C <tree> …`) and to treat writing in the
+  primary as a failed step. Pre-approving `EnterWorktree` in your agent's permission
+  allowlist removes the need for that discipline by moving the session for real.
 - **One unattended run per primary checkout.** When the session cannot move into
   the worktree, the run context pointer in the primary checkout is what later
   steps find, and there is only one of it. A second concurrent run is reported

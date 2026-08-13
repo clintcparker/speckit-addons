@@ -12,7 +12,7 @@ Spec Kit extensions this repo makes **installable**. Two kinds live here:
 | ID | Version | Description |
 |---|---|---|
 | [`screenshots`](screenshots/) | 0.1.0 | Before/after UI screenshots for a feature, committed to the branch for the pull request |
-| [`worktrees`](worktrees/) | 2.0.0 | Default-on worktree isolation — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
+| [`worktrees`](worktrees/) | 2.5.0 | Default-on worktree isolation — fork of [dango85/spec-kit-worktree-parallel](https://github.com/dango85/spec-kit-worktree-parallel) v1.0.0 |
 | [`git`](git/) | 1.1.0 | Worktree-safe fork of spec-kit's bundled `git` v1.0.0 |
 
 Both forks exist to bake in fixes that a `--force` reinstall used to revert: the
