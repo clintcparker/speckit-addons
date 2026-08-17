@@ -17,9 +17,14 @@ specify workflow run send-it-checked -i spec="add dark mode" -i target_branch=ma
 | [`qa`](https://github.com/arunt14/spec-kit-qa) | The `qa` step dispatches `speckit.qa.run` |
 | [`screenshots`](https://github.com/clintcparker/speckit-addons/tree/main/extensions/screenshots) | The two capture steps dispatch `speckit.screenshots.capture` |
 
-All five are hard dependencies: a missing extension means the step fails at
-dispatch. Spec Kit's workflow schema cannot declare this — `requires` accepts
-only `speckit_version` and `integrations` — so install them first:
+All five are hard dependencies, and a missing one is worse than a failure: the
+engine reports `Unknown command: /speckit-<name>`, skips that step, and carries
+on to the next one, so the run ends with status "completed" having done none of
+what the missing step was for. Spec Kit's workflow schema cannot declare the
+dependency either — `requires` accepts only `speckit_version` and
+`integrations`. As of 0.11.0 the `worktree` step checks for all five before it
+takes the run lock and stops the run if any is absent, which turns a wasted
+hour into a message. Install them first and the check never fires:
 
 ```bash
 specify extension catalog add \

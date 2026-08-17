@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.0 (2026-08-17)
+
+### Fixed
+- **Seeding no longer has licence to touch a live external service.** Step 4 said
+  where app state may live and that real user data must survive a failed run; it
+  said nothing about where the state comes *from*. An observed run, seeding the
+  `after` pass for an app whose only ingestion path is a hosted mail API, sent
+  seven authenticated requests to that live API carrying a placeholder token. All
+  seven were rejected before a mailbox was read, and the rule this adds does not
+  depend on that: a rejected request is still an unattended run reaching for
+  somebody's real account. Seeding now comes from fixtures, from a local stub, or
+  from a direct write to the app's own store — and state that cannot be reached
+  that way is left out and recorded, not fetched.
+- **A capture no longer silently lands in the wrong checkout.** Step 7 said which
+  method to use and what to call the file, and assumed the file would appear
+  where it was asked for. A capture tool driven over a protocol rather than as a
+  child process — the Playwright MCP server, a remote debugger — resolves a
+  relative path against the invoking session's working directory, which in an
+  unattended run is the primary checkout, not the run's worktree. One observed
+  run had its PNGs and a `.playwright-mcp/` scratch directory land at the root of
+  the primary and had to move them by hand. The step now asks for an absolute
+  path under `FEATURE_DIR/screenshots/`, and where the tool will not take one,
+  verifies the destination after the *first* capture rather than the last.
+
+### Changed
+- Step 4 requires state placed by hand into the data store to be labelled as such
+  in the manifest's `notes`, along with what the resulting frame does and does not
+  evidence. A hand-inserted row proves the UI renders it; a reviewer looking at the
+  image has no way to tell that from an end-to-end result.
+- Step 7 addresses the illegible frame: an empty-bodied error page or an
+  unpainted window captures as a plausible solid-colour PNG indistinguishable
+  from a failed capture. Capture a working control in the same pass so the frame
+  means something, and record what the control establishes. Changing capture
+  method to render a state legibly stays within the command's remit as long as
+  both halves of a before/after pair are produced the same way.
+
 ## 0.3.0 (2026-08-13)
 
 ### Fixed

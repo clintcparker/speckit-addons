@@ -89,10 +89,12 @@ If `FEATURE_DIR` **itself** is the ignored path, its own `.gitignore` is never r
 
 Follow the profile's `data` and `launch` sections, in whichever order the profile specifies — some apps must be seeded before launch, others after.
 
-Two rules hold regardless of profile:
+Four rules hold regardless of profile:
 
 - **App state never lives inside the repo or worktree.** Auto-commit hooks would commit a database, a log, or a lockfile. Keep data directories and server logs on a path outside the checkout.
 - **Real user data must survive every run, including a failed one.** If the profile's `data` section describes a backup/restore of a real file, treat the restore like a `trap`: perform it in both modes, on success and on failure, before reporting anything.
+- **Seeding never reaches a live external service.** A seed route that authenticates against, fetches from, or writes to somebody's real account — the app's mail provider, a payment gateway, a hosted API — is not a seed route for this command. Not with a placeholder credential, and not on the reasoning that the request will be rejected anyway: an observed run sent seven authenticated requests to a production mail API before establishing that the app's only ingestion path was a live fetch. A rejected request is still a request, against a real account, from an unattended run nobody is watching. Seed from fixtures, from a local stub the app already supports, or by writing the app's own data store directly. If the state you want is reachable only through such a service, do not reach for it: capture without it, and record in the manifest's `notes` what is missing and why.
+- **State you place by hand is labelled as such.** Rows inserted straight into the data store prove that the UI renders them; they do not prove the pipeline that would have produced them. Say which state was hand-placed in the manifest's `notes`, and say what the resulting frame therefore does and does not evidence, so nobody reads the image as an end-to-end result.
 
 Mode `after` reuses the baseline state recorded in the manifest's `app` object so the before/after pair differs only by the UI change. If that state is gone, recreate it by replaying whatever the profile calls the seed procedure, then continue.
 
@@ -113,6 +115,10 @@ Mode `after` **must** reuse the manifest's target list, adding any targets the f
 For each target, capture at every viewport in the profile's `viewports` map. Use the profile's `capture_method`. Filenames: `<target-slug>-<viewport-label>.png` under `before/` or `after/` per mode.
 
 Keep the total payload modest: PNG, viewport- or window-sized, 1–4 targets × the declared viewports.
+
+**Verify where the capture tool actually wrote.** A tool driven over a protocol rather than run as a child process — an MCP browser server, a remote debugger — resolves a relative output path against *its own* working directory, which is the invoking session's, and in an unattended run that is the primary checkout, not this run's worktree. Pass an absolute path under `FEATURE_DIR/screenshots/` wherever the tool accepts one. Where it does not, list the destination after the first capture rather than after the last, and if the file is not there, locate it, move it, and delete any scratch directory the tool left beside it (the Playwright MCP server writes a `.playwright-mcp/` directory next to its output). Note the behaviour in the profile so the other mode's pass does not rediscover it. A frame written outside `FEATURE_DIR` is not a capture — it is a stray file in somebody's checkout, and the next auto-commit hook will commit it.
+
+**A frame that renders nothing is not evidence.** An empty-bodied error page, a blank window, a capture taken before the app finished painting all produce a plausible solid-colour PNG that is indistinguishable from a failed capture. If a frame cannot be told apart from a failure by looking at it, capture a control alongside it — a route known to work, on the same app, in the same pass — and record in `notes` what the control establishes. Switching to a capture method that renders the state legibly is fine and stays within this command's remit, as long as both frames of a before/after pair are produced the same way and the profile records which method was used.
 
 ### 8. Record, commit, clean up
 

@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "yolo"
   name: "Full SDD Cycle - no gates"
-  version: "0.8.0"
+  version: "0.9.0"
   author: "clintcparker"
   description: "Runs worktree → specify → plan → tasks → implement without review gates. Requires the `worktrees` extension."
 
@@ -77,6 +77,26 @@ steps:
     input:
       args: >-
         UNATTENDED RUN — no user is present; never prompt and never ask which layout.
+
+        PREFLIGHT — DO THIS FIRST, BEFORE THE LOCK AND BEFORE CREATING ANYTHING. There is
+        no required-extension list to check here, and that is worth stating rather than
+        leaving to inference: every step after this one dispatches a CORE spec-kit
+        command, and `worktrees` is proven installed by the fact that this step is
+        running. The sibling workflows do carry a list, because a command whose extension
+        is not installed does NOT fail the run — the engine reports `Unknown command:
+        /speckit-<name>` and the workflow moves on and finishes with status "completed".
+        If you add a step that dispatches an extension command, add its id here too.
+
+        DEGRADED, NOT FATAL — `git`. Nothing dispatches its commands, but
+        `create-worktree.sh --from-description` delegates branch naming to
+        `.specify/extensions/git/scripts/bash/create-new-feature-branch.sh` and exits 1
+        with `requires the git extension` without it. Check for that path now, with `ls
+        .specify/extensions/`, rather than discovering it from an exit code. If it is
+        absent, do not stop and do not call `--from-description` at all: derive the
+        branch name yourself per Outline step 1, pass it as a plain branch name, and
+        report `git_extension=absent` in the fields block, so that this branch's number
+        being hand-derived rather than produced by the numbering the rest of the repo
+        uses is on the record.
 
         ACQUIRE LOCK — after determining the branch name (Outline step 1) and before
         creating anything (step 3), generate a run_id (format: <utc-timestamp>-<branch>,

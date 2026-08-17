@@ -5,6 +5,29 @@ All notable changes to the `yolo` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-08-17
+
+### Fixed
+- **A missing `git` extension is degraded, not fatal — and now says so up front.**
+  `create-worktree.sh --from-description` shells out to the git extension's
+  `create-new-feature-branch.sh` and exits 1 without it, which an observed run
+  discovered from the exit code and worked around by deriving the branch name by hand.
+  The `worktree` step now carries a PREFLIGHT block that checks
+  `.specify/extensions/` before calling anything, so the branch name is derived
+  deliberately rather than in recovery, and the step reports `git_extension=absent`
+  so a hand-derived branch number is on the record. This workflow has no ship step to
+  carry that into a pull request, so the run summary is where it lands.
+
+### Changed
+- The same PREFLIGHT block states, rather than leaving to inference, that this
+  workflow has no required-extension list: every step after the first dispatches a
+  core spec-kit command, and `worktrees` is proven installed by the first step
+  running at all. `send-it` and `send-it-checked` do carry a list, because a command
+  whose extension is not installed does not fail the run — the engine reports
+  `Unknown command: /speckit-<name>` and the workflow continues and finishes with
+  status "completed". If a step that dispatches an extension command is ever added
+  here, its id belongs in that block.
+
 ## [0.8.0] — 2026-08-13
 
 ### Fixed

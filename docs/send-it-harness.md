@@ -49,13 +49,13 @@ is not installability. That gap is the entire reason
 |---|---|---|---|
 | [`worktrees`](../extensions/worktrees/) | 2.5.0 | hosted here | `speckit.worktrees.create` — creates the feature branch inside a new worktree and moves the session into it *when it can*. Registered on `before_specify` *and* dispatched as each workflow's first step; idempotent since 2.1.0 so both can fire in one run. Since 2.2.0 it reports `session` separately from `worktree_isolation`, because an unattended run cannot enter the worktree; since 2.3.0 it also writes the run context file every later step reads its feature identity from; since 2.4.0 it takes the run lock that keeps two runs off one primary checkout; and since 2.5.0 it reports `worktree_path` and says plainly that the path overrides isolate only `.specify/scripts/**` |
 | [`git`](../extensions/git/) | 1.1.0 | hosted here | Feature-branch naming and numbering. The worktrees hook delegates to its `create-new-feature-branch.sh` to derive the branch name |
-| [`screenshots`](../extensions/screenshots/) | 0.2.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
+| [`screenshots`](../extensions/screenshots/) | 0.4.0 | hosted here | `speckit.screenshots.capture` — before/after captures committed to the branch, driven by a per-repo app profile |
 | `ship` | 1.0.0 | [arunt14/spec-kit-ship](https://github.com/arunt14/spec-kit-ship) | `speckit.ship.run` — pre-flight, rebase, push, PR creation |
 | `staff-review` | 1.0.0 | [arunt14/spec-kit-staff-review](https://github.com/arunt14/spec-kit-staff-review) | `speckit.staff-review.run` — review report into `FEATURE_DIR/reviews/` |
 | `qa` | 1.0.0 | [arunt14/spec-kit-qa](https://github.com/arunt14/spec-kit-qa) | `speckit.qa.run` — QA report into `FEATURE_DIR/qa/` |
-| [`send-it`](../workflows/send-it/) | 0.9.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
-| [`send-it-checked`](../workflows/send-it-checked/) | 0.10.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
-| [`yolo`](../workflows/yolo/) | 0.8.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
+| [`send-it`](../workflows/send-it/) | 0.10.0 | hosted here | The eight-step workflow: worktree → specify → plan → tasks → screenshots → implement → screenshots → ship |
+| [`send-it-checked`](../workflows/send-it-checked/) | 0.11.0 | hosted here | The same, plus `review` and `qa` between implement and the after-capture |
+| [`yolo`](../workflows/yolo/) | 0.9.0 | hosted here | The gate-free core cycle: worktree → specify → plan → tasks → implement. No screenshots, no ship |
 
 The three first-party extensions are published from this repo as release assets
 with a `sha256` in the catalog. The three third-party ones are pinned pointers at

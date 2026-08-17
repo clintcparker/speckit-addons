@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "send-it"
   name: "Spec to PR, unattended"
-  version: "0.9.0"
+  version: "0.10.0"
   author: "clintcparker"
   description: "worktree → specify → plan → tasks → screenshots → implement → screenshots → ship; no gates, ends in an open PR with before/after UI screenshots. Requires the `worktrees`, `screenshots` and `ship` extensions."
 
@@ -71,6 +71,46 @@ steps:
     input:
       args: >-
         UNATTENDED RUN — no user is present; never prompt and never ask which layout.
+
+        PREFLIGHT — DO THIS FIRST, BEFORE THE LOCK AND BEFORE CREATING ANYTHING. Every
+        step after this one dispatches a command that an extension provides, and a
+        command whose extension is not installed does NOT fail the run: the engine
+        reports `Unknown command: /speckit-<name>` and the workflow moves straight on to
+        the next step and finishes with status "completed". The steps most likely to be
+        lost are the last ones, which have nothing after them to notice — an observed run
+        of the send-it-checked variant lost its last three steps this way, reported
+        success after 93 minutes, opened no pull request, left the work stranded on a
+        branch nobody was told about and held the run lock until it expired. Nothing else
+        in this workflow checks, so check here, where stopping is still free.
+
+        List what is installed: `ls .specify/extensions/` in the primary checkout. Each
+        installed extension is a directory named for its id, and the command files under
+        it are what dispatch resolves against, so that listing is the check. Corroborate
+        with `specify extension list` when the CLI is on PATH, but do not substitute one
+        for the other, and never infer availability from this workflow's README or from a
+        catalog being registered — registering a catalog is not installing an extension,
+        and the extension ids are not always the command names (`screenshots` provides
+        `speckit.screenshots.capture`).
+
+        REQUIRED — each of these backs a step below: `screenshots` (screenshots-before,
+        screenshots-after) and `ship` (ship). If ANY is missing, STOP HERE: acquire no
+        lock, create no worktree, write no run context, commit nothing. Report every
+        missing id in one message — not just the first one found — each with `specify
+        extension add <id>`, plus the catalog registration from this workflow's README
+        when `specify extension search <id>` cannot find it. Stopping costs the user a
+        minute; continuing costs a full unattended run whose only product is a branch
+        nobody knows about. `worktrees` needs no check: this step is its command, so
+        reading this proves it is installed.
+
+        DEGRADED, NOT FATAL — `git`. Nothing dispatches its commands, but
+        `create-worktree.sh --from-description` delegates branch naming to
+        `.specify/extensions/git/scripts/bash/create-new-feature-branch.sh` and exits 1
+        with `requires the git extension` without it. If that path is absent, do not stop
+        and do not call `--from-description` at all: derive the branch name yourself per
+        Outline step 1, pass it as a plain branch name, and report
+        `git_extension=absent` in the fields block so the ship step can say in the pull
+        request that this branch's number was hand-derived rather than produced by the
+        numbering the rest of the repo uses.
 
         ACQUIRE LOCK — after determining the branch name (Outline step 1) and before
         creating anything (step 3), generate a run_id (format: <utc-timestamp>-<branch>,
@@ -751,6 +791,12 @@ steps:
         this pull request should be read: the first means the branch may not
         contain commits the reviewer has locally, the second means the feature
         was built against files no reviewer can see.
+
+        And if the worktree step reported `git_extension=absent`, say so under Known
+        issues: the `git` extension was not installed, so this branch's number was
+        derived by hand instead of by `create-new-feature-branch.sh`, and its
+        consistency with the numbering every other branch in the repo carries is
+        asserted rather than verified.
 
         If any tasks in tasks.md are still incomplete, do not stop — proceed
         and list the incomplete tasks in the pull request description.

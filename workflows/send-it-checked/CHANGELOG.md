@@ -5,6 +5,32 @@ All notable changes to the `send-it-checked` workflow are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this workflow adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-08-17
+
+### Fixed
+- **A missing extension is now caught in the first seconds instead of at the step
+  that needed it.** The engine does not fail a run over an unresolvable command: it
+  reports `Unknown command: /speckit-<name>` and moves on to the next step. An
+  observed run lost `review`, `qa` AND `ship` that way. It spent 93 minutes, built
+  the feature, and ended with the work on a branch and nothing else: no review
+  report, no QA report, no pull request, the run lock held to its TTL — and a run
+  status of "completed" over the top of all of it. The last steps are the ones this
+  costs, because they are the ones with nothing after them to notice they are
+  gone. `requires:` cannot express the dependency (it recognizes only
+  `speckit_version` and `integrations`), so the `worktree` step now carries a PREFLIGHT
+  block: list `.specify/extensions/`, and if any extension backing a later step is
+  absent, stop before the lock is taken and before anything is created, naming every
+  missing id at once with the command that installs it. Stopping costs a minute;
+  the run it replaces cost 93 minutes.
+- **A missing `git` extension is degraded, not fatal — and now says so up front.**
+  `create-worktree.sh --from-description` shells out to the git extension's
+  `create-new-feature-branch.sh` and exits 1 without it, which an observed run
+  discovered from the exit code and worked around by deriving the branch name by hand.
+  The preflight checks for it before calling anything, and the branch name is derived
+  deliberately rather than in recovery. The step reports `git_extension=absent`, and the
+  `ship` step surfaces it under Known issues, because a hand-derived branch number's
+  consistency with the repo's numbering is asserted rather than verified.
+
 ## [0.10.0] — 2026-08-13
 
 ### Fixed
